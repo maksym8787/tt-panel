@@ -759,13 +759,13 @@ function renderMonitor(){
         h('span',null,t('connection_log')),
         periodSelector(S.connPeriod,[{v:1,l:'1h'},{v:6,l:'6h'},{v:24,l:'24h'},{v:168,l:'7d'}],function(v){loadConns(v)})),
       S.conns&&S.conns.connections&&S.conns.connections.length?h('div',null,
-        h('table',{className:'tbl'},
-          h('thead',null,h('tr',null,h('th',null,t('time')),h('th',null,t('ip')),h('th',null,t('user_agent')),h('th',null,t('destination')),h('th',null,t('event')))),
+        h('table',{className:'tbl',style:{tableLayout:'fixed',width:'100%'}},
+          h('thead',null,h('tr',null,h('th',{style:{width:'14%'}},t('time')),h('th',{style:{width:'18%'}},t('ip')),h('th',{style:{width:'22%'}},t('user_agent')),h('th',{style:{width:'32%'}},t('destination')),h('th',{style:{width:'14%'}},t('event')))),
           h('tbody',null,paginatedList('connlog',S.conns.connections,function(c){return h('tr',null,
               h('td',null,ts2dt(c.ts)),
-              h('td',{style:{color:c.ip?'var(--tx)':''}},c.ip||''),
-              h('td',null,(c.ua||'').substring(0,30)),
-              h('td',null,(c.dst||'').substring(0,35)),
+              h('td',{style:{color:c.ip?'var(--tx)':'',overflow:'hidden',textOverflow:'ellipsis'}},c.ip||''),
+              h('td',{style:{overflow:'hidden',textOverflow:'ellipsis'}},c.ua||''),
+              h('td',{style:{overflow:'hidden',textOverflow:'ellipsis'}},c.dst||''),
               h('td',null,h('span',{className:'badge '+(c.event==='connect'?'b-gn':c.event==='disconnect'?'b-rd':'b-bl')},c.event||'')))},25)))):
         h('div',{style:{color:'var(--tx3)',fontSize:'12px',textAlign:'center',padding:'16px'}},t('no_conn_data'))),
 
