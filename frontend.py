@@ -116,9 +116,10 @@ input,textarea,select,button{font-family:inherit;font-size:inherit}
 .card-t .right{display:flex;gap:4px}
 
 /* Stats grid */
-.grid{display:grid;gap:10px}.grid2{grid-template-columns:1fr 1fr}.grid3{grid-template-columns:1fr 1fr 1fr}.grid4{grid-template-columns:repeat(4,1fr)}
-@media(max-width:640px){.grid3,.grid4{grid-template-columns:1fr 1fr}.grid2{grid-template-columns:1fr}}
-@media(max-width:400px){.grid3,.grid4{grid-template-columns:1fr}}
+.grid{display:grid;gap:10px}.grid2{grid-template-columns:1fr 1fr}.grid3{grid-template-columns:1fr 1fr 1fr}.grid4{grid-template-columns:repeat(4,1fr)}.grid5{grid-template-columns:repeat(5,1fr)}
+@media(max-width:900px){.grid5{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:640px){.grid3,.grid4,.grid5{grid-template-columns:1fr 1fr}.grid2{grid-template-columns:1fr}}
+@media(max-width:400px){.grid3,.grid4,.grid5{grid-template-columns:1fr}}
 
 /* Stat cards */
 .stat{background:var(--sf);border:1px solid var(--bd);border-radius:var(--r);padding:14px 16px;position:relative;overflow:hidden;transition:border-color .2s}
@@ -655,7 +656,7 @@ function renderDash(){
   var certDays=cert?cert.days:null;var certClass=certDays!=null?(certDays<14?'off':certDays<30?'warn':'on'):'';
 
   return h('div',{className:'fade-in'},
-    h('div',{className:'grid grid4 section-gap'},
+    h('div',{className:'grid grid5 section-gap'},
       h('div',{className:'stat '+(s.service&&s.service.active?'stat-green':'stat-red')},
         h('div',{className:'stat-l'},t('service')),
         h('div',{className:'stat-v '+(s.service&&s.service.active?'on':'off')},s.service&&s.service.active?t('online'):t('offline')),
