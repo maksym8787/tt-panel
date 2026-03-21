@@ -215,8 +215,8 @@ def _do_deferred_reload():
     with _reload_lock:
         _pending_reload = False
     try:
-        subprocess.run(["systemctl", "restart", "trusttunnel"], timeout=10)
-        logger.info("Service restarted (debounced)")
+        subprocess.run(["systemctl", "reload-or-restart", "trusttunnel"], timeout=10)
+        logger.info("Service reloaded (debounced)")
     except Exception as e:
         logger.error("Service reload error: %s", e)
 
@@ -240,8 +240,8 @@ def apply_reload_now():
             _reload_timer = None
         _pending_reload = False
     try:
-        subprocess.run(["systemctl", "restart", "trusttunnel"], timeout=10)
-        logger.info("Service restarted (immediate)")
+        subprocess.run(["systemctl", "reload-or-restart", "trusttunnel"], timeout=10)
+        logger.info("Service reloaded (immediate)")
     except Exception as e:
         logger.error("Service reload error: %s", e)
 
