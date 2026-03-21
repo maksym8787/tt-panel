@@ -137,7 +137,12 @@ async def add_user(request: Request):
     clients = await asyncio.to_thread(parse_credentials)
     if any(c["username"] == username for c in clients):
         raise HTTPException(400, "User exists")
-    clients.append({"username": username, "password": password})
+    from datetime import datetime
+    clients.append({
+        "username": username, "password": password,
+        "created_at": datetime.now().isoformat(timespec="seconds"),
+        "enabled": True,
+    })
     await asyncio.to_thread(write_credentials, clients)
     schedule_reload()
     return {"ok": True, "username": username, "password": password}
@@ -174,6 +179,23 @@ async def delete_user(username: str, request: Request):
     await asyncio.to_thread(write_credentials, new)
     schedule_reload()
     return {"ok": True}
+
+
+@app.put("/api/users/{username}/toggle")
+async def toggle_user(username: str, request: Request):
+    await require_auth(request)
+    clients = await asyncio.to_thread(parse_credentials)
+    found = False
+    for c in clients:
+        if c["username"] == username:
+            c["enabled"] = not c.get("enabled", True)
+            found = True
+            break
+    if not found:
+        raise HTTPException(404, "Not found")
+    await asyncio.to_thread(write_credentials, clients)
+    schedule_reload()
+    return {"ok": True, "enabled": c["enabled"]}
 
 
 @app.get("/api/users/{username}/config")

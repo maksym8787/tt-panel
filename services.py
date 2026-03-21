@@ -38,32 +38,49 @@ def _parse_toml_stdlib(path: Path) -> list:
         return None
 
 
+def _normalize_client(c):
+    return {
+        "username": c.get("username", ""),
+        "password": c.get("password", ""),
+        "created_at": c.get("created_at", ""),
+        "enabled": c.get("enabled", True) if isinstance(c.get("enabled"), bool) else str(c.get("enabled", "true")).lower() != "false",
+    }
+
+
 def parse_credentials():
     clients = []
     if not CREDS_TOML.exists():
         return clients
     result = _parse_toml_stdlib(CREDS_TOML)
     if result is not None:
-        return [{"username": c.get("username", ""), "password": c.get("password", "")} for c in result]
+        return [_normalize_client(c) for c in result]
     current = {}
     for line in CREDS_TOML.read_text().splitlines():
         line = line.strip()
         if line == "[[client]]":
             if current:
-                clients.append(current)
+                clients.append(_normalize_client(current))
             current = {}
         elif "=" in line and not line.startswith("#"):
             k, v = line.split("=", 1)
             current[k.strip()] = v.strip().strip('"')
     if current:
-        clients.append(current)
+        clients.append(_normalize_client(current))
     return clients
 
 
 def write_credentials(clients):
     lines = []
     for c in clients:
-        lines.extend(["[[client]]", f'username = "{c["username"]}"', f'password = "{c["password"]}"', ""])
+        enabled = c.get("enabled", True)
+        created = c.get("created_at", "")
+        lines.append("[[client]]")
+        lines.append(f'username = "{c["username"]}"')
+        lines.append(f'password = "{c["password"]}"')
+        if created:
+            lines.append(f'created_at = "{created}"')
+        lines.append(f'enabled = {"true" if enabled else "false"}')
+        lines.append("")
     CREDS_TOML.write_text("\n".join(lines))
 
 

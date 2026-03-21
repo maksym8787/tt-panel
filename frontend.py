@@ -294,7 +294,12 @@ en:{
   s_ago:'s ago',m_ago:'m ago',h_ago:'h ago',d_ago:'d ago',
   ip_address:'IP address',location:'Location',isp:'ISP',destinations:'Destinations',
   svc_action_ok:'OK',no_cert:'No cert',auto_renew:'Auto-renew enabled',
-  change:'Change',config_for:'Config'
+  change:'Change',config_for:'Config',
+  btn_config:'Config',btn_qr:'QR',btn_pass:'Password',btn_del:'Delete',
+  btn_enable:'Enable',btn_disable:'Disable',created_label:'Created',
+  user_enabled:'Enabled',user_disabled:'Disabled',
+  show_more:'Show more',show_less:'Show less',of_total:'of',
+  prev_page:'Prev',next_page:'Next'
 },
 ru:{
   dashboard:'\u041f\u0430\u043d\u0435\u043b\u044c',monitor:'\u041c\u043e\u043d\u0438\u0442\u043e\u0440',users:'\u041f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u0438',settings:'\u041d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0438',logs:'\u041b\u043e\u0433\u0438',
@@ -348,7 +353,12 @@ ru:{
   s_ago:'\u0441 \u043d\u0430\u0437\u0430\u0434',m_ago:'\u043c \u043d\u0430\u0437\u0430\u0434',h_ago:'\u0447 \u043d\u0430\u0437\u0430\u0434',d_ago:'\u0434 \u043d\u0430\u0437\u0430\u0434',
   ip_address:'IP \u0430\u0434\u0440\u0435\u0441',location:'\u041b\u043e\u043a\u0430\u0446\u0438\u044f',isp:'\u041f\u0440\u043e\u0432\u0430\u0439\u0434\u0435\u0440',destinations:'\u041d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u044f',
   svc_action_ok:'OK',no_cert:'\u041d\u0435\u0442 \u0441\u0435\u0440\u0442.',auto_renew:'\u0410\u0432\u0442\u043e-\u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u0438\u0435 \u0432\u043a\u043b.',
-  change:'\u0421\u043c\u0435\u043d\u0438\u0442\u044c',config_for:'\u041a\u043e\u043d\u0444\u0438\u0433'
+  change:'\u0421\u043c\u0435\u043d\u0438\u0442\u044c',config_for:'\u041a\u043e\u043d\u0444\u0438\u0433',
+  btn_config:'\u041a\u043e\u043d\u0444\u0438\u0433',btn_qr:'QR',btn_pass:'\u041f\u0430\u0440\u043e\u043b\u044c',btn_del:'\u0423\u0434\u0430\u043b\u0438\u0442\u044c',
+  btn_enable:'\u0412\u043a\u043b\u044e\u0447\u0438\u0442\u044c',btn_disable:'\u041e\u0442\u043a\u043b\u044e\u0447\u0438\u0442\u044c',created_label:'\u0421\u043e\u0437\u0434\u0430\u043d',
+  user_enabled:'\u0412\u043a\u043b\u044e\u0447\u0435\u043d',user_disabled:'\u041e\u0442\u043a\u043b\u044e\u0447\u0435\u043d',
+  show_more:'\u041f\u043e\u043a\u0430\u0437\u0430\u0442\u044c \u0435\u0449\u0451',show_less:'\u0421\u0432\u0435\u0440\u043d\u0443\u0442\u044c',of_total:'\u0438\u0437',
+  prev_page:'\u041d\u0430\u0437\u0430\u0434',next_page:'\u0412\u043f\u0435\u0440\u0451\u0434'
 }};
 function t(k){return (T[S.lang]||T.en)[k]||T.en[k]||k}
 function setLang(l){S.lang=l;localStorage.setItem('tt_lang',l);R()}
@@ -414,6 +424,8 @@ async function loadMonitorAll(){
 function drawMonitorCharts(){if(!window.Chart){setTimeout(drawMonitorCharts,200);return}drawAllCharts();drawTrafficChart();drawConnChart()}
 
 // ─── User actions (#14 modal dialogs, #15 loading) ──────
+async function toggleUser(u,btn){await withLoading(btn,async function(){try{var r=await api('/users/'+u+'/toggle',{method:'PUT'});toast(r.enabled?t('user_enabled'):t('user_disabled'));loadDash()}catch(e){toast(e.message,true)}})}
+function copyPassword(pw){navigator.clipboard.writeText(pw).then(function(){toast(t('copied'))}).catch(function(){toast('Copy failed',true)})}
 async function addUser(u,p){try{var r=await api('/users',{method:'POST',body:JSON.stringify({username:u,password:p})});toast(t('user_created')+' "'+u+'" ('+t('pass_label')+': '+r.password+')');S.modal=null;loadDash()}catch(e){toast(e.message,true)}}
 async function deleteUser(u){S.modal={t:'confirm',title:t('delete_user'),msg:t('delete_confirm')+' "'+u+'"?',onConfirm:async function(btn){await withLoading(btn,async function(){try{await api('/users/'+u,{method:'DELETE'});toast(t('deleted'));S.modal=null;loadDash()}catch(e){toast(e.message,true)}})}};R()}
 async function chgPass(u){S.modal={t:'chgpass',u:u};R()}
@@ -519,6 +531,35 @@ function loadingView(full){return h('div',{className:'loading-box',style:full?{m
 function periodSelector(current,periods,onChange){
   var btns=[];for(var i=0;i<periods.length;i++){(function(p){btns.push(h('button',{className:'per'+(current===p.v?' on':''),onClick:function(){onChange(p.v)}},p.l))})(periods[i])}
   return h('div',{className:'periods'},btns)}
+
+// ─── Pagination component ────────────────────────────────
+var _pageState={};
+function paginatedList(key,items,renderFn,pageSize){
+  pageSize=pageSize||20;if(!items||!items.length)return null;
+  if(!_pageState[key])_pageState[key]=0;
+  var page=_pageState[key];var total=items.length;var pages=Math.ceil(total/pageSize);
+  if(page>=pages)page=pages-1;if(page<0)page=0;_pageState[key]=page;
+  var start=page*pageSize;var slice=items.slice(start,start+pageSize);
+  var content=slice.map(renderFn);
+  if(pages<=1)return h('div',null,content);
+  return h('div',null,content,
+    h('div',{style:{display:'flex',justifyContent:'center',alignItems:'center',gap:'10px',padding:'10px 0',fontSize:'11px',color:'var(--tx2)'}},
+      h('button',{className:'btn btn-xs',disabled:page===0,onClick:function(){_pageState[key]=page-1;R()}},'\u25C0'),
+      (start+1)+'\u2013'+Math.min(start+pageSize,total)+' '+t('of_total')+' '+total,
+      h('button',{className:'btn btn-xs',disabled:page>=pages-1,onClick:function(){_pageState[key]=page+1;R()}},'\u25B6')))
+}
+
+// ─── Collapsible card ────────────────────────────────────
+var _collapseState={};
+function collapsibleCard(key,title,content,startOpen,extraStyle){
+  if(_collapseState[key]===undefined)_collapseState[key]=!!startOpen;
+  var open=_collapseState[key];
+  return h('div',{className:'card',style:extraStyle||{}},
+    h('div',{className:'card-t',style:{cursor:'pointer',userSelect:'none'},onClick:function(){_collapseState[key]=!open;R()}},
+      h('span',null,title),
+      h('span',{style:{marginLeft:'auto',fontSize:'10px',color:'var(--tx3)',transition:'transform .2s',display:'inline-block',transform:open?'rotate(180deg)':'rotate(0)'}},'\u25BC')),
+    open?content:null)
+}
 
 // ─── Render ─────────────────────────────────────────────
 var _rTimer=null;var _rCallbacks=[];
@@ -685,20 +726,15 @@ function renderMonitor(){
       periodSelector(S.monPeriod,periods,function(v){loadHistory(v)})),
 
     h('div',{className:'card'},
-      h('div',{className:'card-t'},h('span',null,t('active_sessions')),
-        S.status?h('span',{className:'badge b-gn'},String(S.status.live?S.status.live.sessions||0:0)+' '+t('now')):null),
+      h('div',{className:'card-t'},t('active_sessions')),
       h('div',{className:'chart-wrap'},h('canvas',{id:'ch-sessions'}))),
 
     h('div',{className:'card'},
-      h('div',{className:'card-t'},h('span',null,t('bandwidth')),
-        h('div',{className:'right'},
-          h('span',{className:'badge b-gn'},'DL '+fmt(S.status&&S.status.live?S.status.live.outbound_bytes:0)),
-          h('span',{className:'badge b-or'},'UL '+fmt(S.status&&S.status.live?S.status.live.inbound_bytes:0)))),
+      h('div',{className:'card-t'},t('bandwidth')),
       h('div',{className:'chart-wrap'},h('canvas',{id:'ch-bandwidth'}))),
 
     h('div',{className:'card'},
-      h('div',{className:'card-t'},h('span',null,t('cpu_memory')),
-        h('span',{className:'badge b-bl'},(S.status&&S.status.live?S.status.live.memory_mb:0)+' MB')),
+      h('div',{className:'card-t'},t('cpu_memory')),
       h('div',{className:'chart-wrap'},h('canvas',{id:'ch-resources'}))),
 
     h('div',{className:'card'},
@@ -706,9 +742,7 @@ function renderMonitor(){
       h('div',{className:'chart-wrap'},h('canvas',{id:'ch-conns'}))),
 
     h('div',{className:'card'},
-      h('div',{className:'card-t'},
-        h('span',null,t('online_users')),
-        h('span',{className:'badge b-gn'},String(S.online?S.online.live_sessions||0:0)+' '+t('sessions'))),
+      h('div',{className:'card-t'},t('online_users')),
       S.online&&S.online.online_users&&S.online.online_users.length?
         h('div',{style:{maxHeight:'200px',overflow:'auto'}},
           h('table',{className:'tbl'},
@@ -725,33 +759,29 @@ function renderMonitor(){
         h('div',{style:{fontSize:'10px',fontWeight:'600',color:'var(--tx3)',textTransform:'uppercase',letterSpacing:'.05em',marginBottom:'8px'}},t('recently_active')),
         h('div',{style:{display:'flex',flexWrap:'wrap',gap:'6px'}},S.online.recently_active.slice(0,20).map(function(u){var g=u.geo||{};return h('span',{className:'badge b-bl',style:{fontSize:'11px'}},(g.flag?g.flag+' ':'')+u.ip)}))):null),
 
-    h('div',{className:'card'},
-      h('div',{className:'card-t'},
+    collapsibleCard('conn_log',h('span',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',width:'100%'}},
         h('span',null,t('connection_log')),
-        h('div',{className:'right'},
-          periodSelector(S.connPeriod,[{v:1,l:'1h'},{v:6,l:'6h'},{v:24,l:'24h'},{v:168,l:'7d'}],function(v){loadConns(v)}))),
-      S.conns&&S.conns.connections&&S.conns.connections.length?h('div',{style:{maxHeight:'280px',overflow:'auto'}},
+        periodSelector(S.connPeriod,[{v:1,l:'1h'},{v:6,l:'6h'},{v:24,l:'24h'},{v:168,l:'7d'}],function(v){loadConns(v)})),
+      S.conns&&S.conns.connections&&S.conns.connections.length?h('div',null,
         h('table',{className:'tbl'},
           h('thead',null,h('tr',null,h('th',null,t('time')),h('th',null,t('ip')),h('th',null,t('user_agent')),h('th',null,t('destination')),h('th',null,t('event')))),
-          h('tbody',null,S.conns.connections.slice(0,80).map(function(c){return h('tr',null,
+          h('tbody',null,paginatedList('connlog',S.conns.connections,function(c){return h('tr',null,
               h('td',null,ts2dt(c.ts)),
               h('td',{style:{color:c.ip?'var(--tx)':''}},c.ip||''),
               h('td',null,(c.ua||'').substring(0,30)),
               h('td',null,(c.dst||'').substring(0,35)),
-              h('td',null,h('span',{className:'badge '+(c.event==='connect'?'b-gn':c.event==='disconnect'?'b-rd':'b-bl')},c.event||'')))})))):
+              h('td',null,h('span',{className:'badge '+(c.event==='connect'?'b-gn':c.event==='disconnect'?'b-rd':'b-bl')},c.event||'')))},25)))):
         h('div',{style:{color:'var(--tx3)',fontSize:'12px',textAlign:'center',padding:'16px'}},t('no_conn_data'))),
 
-    S.conns&&S.conns.top_destinations&&S.conns.top_destinations.length?h('div',{className:'card'},
-      h('div',{className:'card-t'},t('top_destinations')),
-      h('div',{style:{maxHeight:'220px',overflow:'auto'}},
+    S.conns&&S.conns.top_destinations&&S.conns.top_destinations.length?
+      collapsibleCard('top_dst',t('top_destinations'),
         h('table',{className:'tbl'},
           h('thead',null,h('tr',null,h('th',null,t('domain')),h('th',{style:{textAlign:'right'}},t('connections')))),
-          h('tbody',null,S.conns.top_destinations.map(function(d){return h('tr',null,h('td',null,d.dst),h('td',{style:{textAlign:'right'}},String(d.count)))}))))):null,
+          h('tbody',null,S.conns.top_destinations.map(function(d){return h('tr',null,h('td',null,d.dst),h('td',{style:{textAlign:'right'}},String(d.count)))})))):null,
 
     h('div',{className:'grid grid2',style:{gap:'14px'}},
-      S.conns&&S.conns.per_client&&S.conns.per_client.length?h('div',{className:'card',style:{margin:0}},
-        h('div',{className:'card-t'},t('traffic_per_client')),
-        h('div',{style:{maxHeight:'200px',overflow:'auto'}},
+      S.conns&&S.conns.per_client&&S.conns.per_client.length?
+        collapsibleCard('per_client',t('traffic_per_client'),
           h('table',{className:'tbl'},
             h('thead',null,h('tr',null,h('th',null,t('client_ip')),h('th',null,t('location')),h('th',null,t('isp')),h('th',{style:{textAlign:'right'}},t('conn')),h('th',null,t('last_seen')))),
             h('tbody',null,S.conns.per_client.map(function(c){var g=c.geo||{};return h('tr',null,
@@ -759,16 +789,15 @@ function renderMonitor(){
               h('td',null,g.flag?(g.flag+' '):'',g.city?(g.city+', '):'',(g.country||'')),
               h('td',{style:{fontSize:'10px',color:'var(--tx2)'}},g.isp||'\u2014'),
               h('td',{style:{textAlign:'right'}},String(c.connections)),
-              h('td',null,ago(c.last_seen)))}))))):h('div',{className:'card',style:{margin:0}},h('div',{style:{color:'var(--tx3)',fontSize:'12px',textAlign:'center',padding:'16px'}},t('no_client_data'))),
-      S.conns&&S.conns.top_ports&&S.conns.top_ports.length?h('div',{className:'card',style:{margin:0}},
-        h('div',{className:'card-t'},t('port_breakdown')),
-        h('div',{style:{maxHeight:'200px',overflow:'auto'}},
+              h('td',null,ago(c.last_seen)))})),false,{margin:0})):h('div',{className:'card',style:{margin:0}},h('div',{style:{color:'var(--tx3)',fontSize:'12px',textAlign:'center',padding:'16px'}},t('no_client_data'))),
+      S.conns&&S.conns.top_ports&&S.conns.top_ports.length?
+        collapsibleCard('top_ports',t('port_breakdown'),
           h('table',{className:'tbl'},
             h('thead',null,h('tr',null,h('th',null,t('port')),h('th',null,t('svc_name')),h('th',{style:{textAlign:'right'}},t('count')))),
             h('tbody',null,S.conns.top_ports.map(function(p){var svc=p.port==='443'?'HTTPS':p.port==='80'?'HTTP':p.port==='53'?'DNS':p.port==='853'?'DoT':'';return h('tr',null,
               h('td',{style:{fontFamily:'var(--m)'}},p.port),
               h('td',null,svc?h('span',{className:'badge b-bl'},svc):''),
-              h('td',{style:{textAlign:'right'}},String(p.count)))}))))):h('div',{className:'card',style:{margin:0}},h('div',{style:{color:'var(--tx3)',fontSize:'12px',textAlign:'center',padding:'16px'}},t('no_port_data')))),
+              h('td',{style:{textAlign:'right'}},String(p.count)))})),false,{margin:0})):h('div',{className:'card',style:{margin:0}},h('div',{style:{color:'var(--tx3)',fontSize:'12px',textAlign:'center',padding:'16px'}},t('no_port_data')))),
 
     h('div',{style:{display:'flex',justifyContent:'space-between',fontSize:'10px',color:'var(--tx3)',fontFamily:'var(--m)',marginTop:'8px',padding:'0 4px'}},
       S.conns&&S.conns.unique_ips?h('span',null,t('unique_ips')+': '+S.conns.unique_ips.length):null,
@@ -796,16 +825,24 @@ function renderUsers(){
           h('span',{className:'dot dot-on',style:{width:'6px',height:'6px'}}),ip+' ('+info.connections+' '+t('conn')+', '+ago(info.last_seen)+')')}))):null,
     h('div',{id:'user-list'},filtered.map(function(u){return renderUserCard(u)})));
 }
-function renderUserCard(u){return h('div',{className:'uc'},
+function renderUserCard(u){var dis=u.enabled===false;var created=u.created_at?u.created_at.replace('T',' ').substring(0,16):'';
+  return h('div',{className:'uc',style:dis?{opacity:'0.5'}:{}},
   h('div',{className:'ui'},
-    h('div',{className:'ua'},u.username[0].toUpperCase()),
-    h('div',null,h('div',{className:'un'},u.username),
-      u.password?h('div',{className:'up',style:{cursor:'pointer'},title:'Click to reveal',onClick:function(e){e.target.textContent=e.target.textContent==='\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022'?u.password:'\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022'}},'\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022'):null)),
+    h('div',{className:'ua',style:dis?{background:'var(--rd)',opacity:'0.5'}:{}},u.username[0].toUpperCase()),
+    h('div',null,
+      h('div',{style:{display:'flex',alignItems:'center',gap:'6px'}},
+        h('span',{className:'un'},u.username),
+        dis?h('span',{className:'badge b-rd',style:{fontSize:'9px'}},t('user_disabled')):null),
+      created?h('div',{style:{fontSize:'10px',color:'var(--tx3)',marginTop:'1px'}},t('created_label')+': '+created):null,
+      u.password?h('div',{style:{display:'flex',alignItems:'center',gap:'4px',marginTop:'2px'}},
+        h('span',{className:'up',style:{cursor:'pointer'},onClick:function(e){var sp=e.target;if(sp.textContent==='\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022'){sp.textContent=u.password;copyPassword(u.password)}else{sp.textContent='\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022'}}},'\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022'),
+        h('span',{style:{cursor:'pointer',fontSize:'12px',color:'var(--tx3)'},title:t('copy'),onClick:function(){copyPassword(u.password)}},'\u{1F4CB}')):null)),
   h('div',{className:'uact'},
-    h('button',{className:'btn btn-xs',onClick:function(){showCfg(u.username,'toml')}},'TOML'),
-    h('button',{className:'btn btn-xs',onClick:function(){showCfg(u.username,'deeplink')}},'QR'),
-    h('button',{className:'btn btn-xs',onClick:function(){chgPass(u.username)}},'Pass'),
-    h('button',{className:'btn btn-xs btn-d',onClick:function(){deleteUser(u.username)}},'Del')))}
+    h('button',{className:'btn btn-xs',onClick:function(){showCfg(u.username,'toml')}},t('btn_config')),
+    h('button',{className:'btn btn-xs',onClick:function(){showCfg(u.username,'deeplink')}},t('btn_qr')),
+    h('button',{className:'btn btn-xs',onClick:function(){chgPass(u.username)}},t('btn_pass')),
+    h('button',{className:'btn btn-xs'+(dis?' btn-p':''),onClick:function(e){toggleUser(u.username,e.target)}},dis?t('btn_enable'):t('btn_disable')),
+    h('button',{className:'btn btn-xs btn-d',onClick:function(){deleteUser(u.username)}},t('btn_del'))))}
 
 // ─── Settings ───────────────────────────────────────────
 function renderSettings(){
