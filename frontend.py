@@ -249,7 +249,7 @@ en:{
   disk:'Disk',uptime:'Uptime',vps_resources:'VPS Resources',traffic_hourly:'Hourly traffic',
   sockets:'Sockets (TCP/UDP)',controls:'Controls',refresh:'Refresh',
   restart:'Restart',reload_tls:'Reload TLS',stop:'Stop',renew_cert:'Renew cert',
-  server_info:'Server info',domain:'Domain',uptime:'Uptime',
+  server_info:'Server info',domain:'Domain',uptime:'Uptime',server_uptime:'Server uptime',service_uptime:'Service uptime',
   monitoring:'Monitoring',active_sessions:'Active sessions',now:'now',
   bandwidth:'Traffic (Download / Upload)',cpu_memory:'CPU & Memory',
   online_users:'Online users',sessions:'sessions',
@@ -303,7 +303,7 @@ ru:{
   disk:'\u0414\u0438\u0441\u043a',uptime:'\u0410\u043f\u0442\u0430\u0439\u043c',vps_resources:'\u0420\u0435\u0441\u0443\u0440\u0441\u044b VPS',traffic_hourly:'\u0422\u0440\u0430\u0444\u0438\u043a \u043f\u043e \u0447\u0430\u0441\u0430\u043c',
   sockets:'\u0421\u043e\u043a\u0435\u0442\u044b (TCP/UDP)',controls:'\u0423\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u0438\u0435',refresh:'\u041e\u0431\u043d\u043e\u0432\u0438\u0442\u044c',
   restart:'\u041f\u0435\u0440\u0435\u0437\u0430\u043f\u0443\u0441\u043a',reload_tls:'\u041f\u0435\u0440\u0435\u0437\u0430\u0433\u0440. TLS',stop:'\u0421\u0442\u043e\u043f',renew_cert:'\u041e\u0431\u043d\u043e\u0432\u0438\u0442\u044c \u0441\u0435\u0440\u0442.',
-  server_info:'\u0418\u043d\u0444\u043e\u0440\u043c\u0430\u0446\u0438\u044f \u043e \u0441\u0435\u0440\u0432\u0435\u0440\u0435',domain:'\u0414\u043e\u043c\u0435\u043d',uptime:'\u0410\u043f\u0442\u0430\u0439\u043c',
+  server_info:'\u0418\u043d\u0444\u043e\u0440\u043c\u0430\u0446\u0438\u044f \u043e \u0441\u0435\u0440\u0432\u0435\u0440\u0435',domain:'\u0414\u043e\u043c\u0435\u043d',uptime:'\u0410\u043f\u0442\u0430\u0439\u043c',server_uptime:'\u0410\u043f\u0442\u0430\u0439\u043c \u0441\u0435\u0440\u0432\u0435\u0440\u0430',service_uptime:'\u0410\u043f\u0442\u0430\u0439\u043c \u0441\u0435\u0440\u0432\u0438\u0441\u0430',
   monitoring:'\u041c\u043e\u043d\u0438\u0442\u043e\u0440\u0438\u043d\u0433',active_sessions:'\u0410\u043a\u0442\u0438\u0432\u043d\u044b\u0435 \u0441\u0435\u0441\u0441\u0438\u0438',now:'\u0441\u0435\u0439\u0447\u0430\u0441',
   bandwidth:'\u0422\u0440\u0430\u0444\u0438\u043a (\u0417\u0430\u0433\u0440\u0443\u0437\u043a\u0430 / \u041e\u0442\u0434\u0430\u0447\u0430)',cpu_memory:'CPU \u0438 \u041f\u0430\u043c\u044f\u0442\u044c',
   online_users:'\u041e\u043d\u043b\u0430\u0439\u043d \u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u0438',sessions:'\u0441\u0435\u0441\u0441\u0438\u0439',
@@ -358,11 +358,14 @@ var S={auth:false,setup:false,loading:true,tab:'dashboard',status:null,users:[],
 // ─── API ────────────────────────────────────────────────
 async function api(p,o){o=o||{};var r=await fetch(A+p,{headers:{'Content-Type':'application/json'},credentials:'same-origin',...o});var d=await r.json();if(!r.ok)throw new Error(d.detail||r.statusText);return d}
 function toast(m,e){S.toast={m:m,e:!!e};R();setTimeout(function(){S.toast=null;R()},3500)}
-function fmt(b){if(b==null)return '0 B';if(b>1073741824)return(b/1073741824).toFixed(2)+' GB';if(b>1048576)return(b/1048576).toFixed(1)+' MB';if(b>1024)return(b/1024).toFixed(0)+' KB';return b+' B'}
-function fmtShort(b){if(b==null)return '0';if(b>1073741824)return(b/1073741824).toFixed(1)+'G';if(b>1048576)return(b/1048576).toFixed(0)+'M';if(b>1024)return(b/1024).toFixed(0)+'K';return b+''}
+function fmt(b){if(b==null)return '0 B';if(b>=1099511627776)return(b/1099511627776).toFixed(2)+' TB';if(b>=1073741824)return(b/1073741824).toFixed(2)+' GB';if(b>=1048576)return(b/1048576).toFixed(1)+' MB';if(b>=1024)return(b/1024).toFixed(0)+' KB';return b+' B'}
+function fmtShort(b){if(b==null)return '0';if(b>=1099511627776)return(b/1099511627776).toFixed(1)+' TB';if(b>=1073741824)return(b/1073741824).toFixed(1)+' GB';if(b>=1048576)return(b/1048576).toFixed(0)+' MB';if(b>=1024)return(b/1024).toFixed(0)+' KB';return b+' B'}
+function fmtTooltip(b){if(b==null)return '0 B';if(b>=1099511627776)return(b/1099511627776).toFixed(2)+' TB';if(b>=1073741824)return(b/1073741824).toFixed(2)+' GB';if(b>=1048576)return(b/1048576).toFixed(1)+' MB';if(b>=1024)return(b/1024).toFixed(0)+' KB';return b+' B'}
 function ts2t(ts){return new Date(ts*1000).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}
+function ts2h(ts){var d=new Date(ts*1000);return String(d.getHours()).padStart(2,'0')+':00'}
 function ts2dt(ts){return new Date(ts*1000).toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}
 function ago(ts){var d=Math.floor(Date.now()/1000-ts);if(d<60)return d+' '+t('s_ago');if(d<3600)return Math.floor(d/60)+' '+t('m_ago');if(d<86400)return Math.floor(d/3600)+' '+t('h_ago');return Math.floor(d/86400)+' '+t('d_ago')}
+function fmtUptime(sec){if(!sec)return '\u2014';var d=Math.floor(sec/86400),h=Math.floor((sec%86400)/3600),m=Math.floor((sec%3600)/60);if(d>0)return d+'d '+h+'h '+m+'m';if(h>0)return h+'h '+m+'m';return m+'m'}
 
 // (#15) Loading state helper
 function withLoading(btn,fn){
@@ -456,7 +459,7 @@ function drawAllCharts(){
   if(c1){updateChart('sess',c1,{type:'line',data:{labels:labels,datasets:[mkDataset('Sessions',d.map(function(x){return x.sessions}),chartColors.sessions)]},options:chartOpts()})}
 
   var c2=document.getElementById('ch-bandwidth');
-  if(c2){var bwOpts=chartOpts(function(v){return fmtShort(v)});bwOpts.plugins={...bwOpts.plugins,legend:{display:true,labels:{color:'#8899aa',font:{family:'DM Sans',size:10},boxWidth:8,boxHeight:8,padding:12,usePointStyle:true}}};updateChart('bw',c2,{type:'line',data:{labels:labels,datasets:[mkDataset('Download',d.map(function(x){return x.out}),chartColors.download),mkDataset('Upload',d.map(function(x){return x['in']}),chartColors.upload)]},options:bwOpts})}
+  if(c2){var bwOpts=chartOpts(function(v){return fmtShort(v)});bwOpts.plugins={...bwOpts.plugins,legend:{display:true,labels:{color:'#8899aa',font:{family:'DM Sans',size:10},boxWidth:8,boxHeight:8,padding:12,usePointStyle:true}},tooltip:{...bwOpts.plugins.tooltip,callbacks:{label:function(ctx){return ctx.dataset.label+': '+fmtTooltip(ctx.raw)}}}};updateChart('bw',c2,{type:'line',data:{labels:labels,datasets:[mkDataset('Download',d.map(function(x){return x.out}),chartColors.download),mkDataset('Upload',d.map(function(x){return x['in']}),chartColors.upload)]},options:bwOpts})}
 
   var c3=document.getElementById('ch-resources');
   if(c3){
@@ -471,7 +474,10 @@ function drawTrafficChart(){
   if(!window.Chart){setTimeout(drawTrafficChart,500);return}
   if(!S.traffic||!S.traffic.hourly.length)return;
   var d=S.traffic.hourly;var c=document.getElementById('ch-traffic');
-  if(c){updateChart('traffic',c,{type:'bar',data:{labels:d.map(function(x){var dt=new Date(x.ts*1000);return dt.getDate()+'/'+(dt.getMonth()+1)+' '+dt.getHours()+'h'}),datasets:[{label:'Download',data:d.map(function(x){return x.out}),backgroundColor:'rgba(34,197,94,0.5)',borderRadius:3},{label:'Upload',data:d.map(function(x){return x['in']}),backgroundColor:'rgba(245,158,11,0.5)',borderRadius:3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,labels:{color:'#8899aa',font:{family:'DM Sans',size:10},boxWidth:8,boxHeight:8,padding:12,usePointStyle:true}}},scales:{x:{display:true,ticks:{color:'#556677',font:{family:'JetBrains Mono',size:8},maxTicksLimit:12,maxRotation:0},stacked:true,grid:{display:false},border:{display:false}},y:{display:true,ticks:{color:'#556677',font:{family:'JetBrains Mono',size:9},callback:function(v){return fmtShort(v)},maxTicksLimit:5},grid:{color:'rgba(30,42,58,0.5)'},stacked:true,border:{display:false}}}}})}
+  if(c){
+    var labels=d.map(function(x){var dt=new Date(x.ts*1000);var h=String(dt.getHours()).padStart(2,'0')+':00';if(dt.getHours()===0)return dt.getDate()+'.'+(dt.getMonth()+1)+' '+h;return h});
+    updateChart('traffic',c,{type:'bar',data:{labels:labels,datasets:[{label:'Download',data:d.map(function(x){return x.out}),backgroundColor:'rgba(34,197,94,0.5)',borderRadius:3},{label:'Upload',data:d.map(function(x){return x['in']}),backgroundColor:'rgba(245,158,11,0.5)',borderRadius:3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,labels:{color:'#8899aa',font:{family:'DM Sans',size:10},boxWidth:8,boxHeight:8,padding:12,usePointStyle:true}},tooltip:{backgroundColor:'#131a24',borderColor:'#1e2a3a',borderWidth:1,titleColor:'#e2e8f0',bodyColor:'#8899aa',padding:10,cornerRadius:8,callbacks:{label:function(ctx){return ctx.dataset.label+': '+fmtTooltip(ctx.raw)}}}},scales:{x:{display:true,ticks:{color:'#556677',font:{family:'JetBrains Mono',size:8},maxTicksLimit:24,maxRotation:0},stacked:true,grid:{display:false},border:{display:false}},y:{display:true,ticks:{color:'#556677',font:{family:'JetBrains Mono',size:9},callback:function(v){return fmtShort(v)},maxTicksLimit:5},grid:{color:'rgba(30,42,58,0.5)'},stacked:true,border:{display:false}}}}})
+  }
 }
 
 function drawConnChart(){
@@ -649,7 +655,7 @@ function renderDash(){
     h('div',{className:'card'},
       h('div',{className:'card-t'},t('server_info')),
       h('div',{style:{fontFamily:'var(--m)',fontSize:'11px',color:'var(--tx3)',lineHeight:'1.8',whiteSpace:'pre-wrap'}},
-        t('domain')+':  '+s.domain+'\nIP:      '+s.ip+'\nPID:     '+(s.service&&s.service.pid?s.service.pid:'\u2014')+'\n'+t('uptime')+':  '+(s.service&&s.service.uptime?s.service.uptime:'\u2014')))
+        t('domain')+':          '+s.domain+'\nIP:              '+s.ip+'\nPID:             '+(s.service&&s.service.pid?s.service.pid:'\u2014')+'\n'+t('server_uptime')+':  '+fmtUptime(s.vps&&s.vps.uptime_seconds)+'\n'+t('service_uptime')+': '+fmtUptime(s.service&&s.service.uptime_seconds)))
   );
 }
 

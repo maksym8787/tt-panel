@@ -93,10 +93,10 @@ def export_client_config(username, fmt="toml"):
 
 
 def get_service_status():
-    info = {"active": False, "uptime": "", "memory": "", "pid": ""}
+    info = {"active": False, "uptime": "", "uptime_seconds": 0, "memory": "", "pid": ""}
     try:
         r = subprocess.run(["systemctl", "show", "trusttunnel", "--no-pager",
-            "-p", "ActiveState,MainPID,MemoryCurrent,ActiveEnterTimestamp"],
+            "-p", "ActiveState,MainPID,MemoryCurrent,ActiveEnterTimestampMonotonic"],
             capture_output=True, text=True, timeout=5)
         for line in r.stdout.splitlines():
             if line.startswith("ActiveState="):
@@ -107,8 +107,18 @@ def get_service_status():
                 v = line.split("=", 1)[1]
                 if v.isdigit():
                     info["memory"] = f"{int(v)/1024/1024:.1f} MB"
-            elif line.startswith("ActiveEnterTimestamp="):
-                info["uptime"] = line.split("=", 1)[1].strip()
+            elif line.startswith("ActiveEnterTimestampMonotonic="):
+                v = line.split("=", 1)[1].strip()
+                if v.isdigit() and int(v) > 0:
+                    mono_now = int(time.monotonic() * 1_000_000)
+                    try:
+                        with open("/proc/uptime") as f:
+                            boot_seconds = float(f.read().split()[0])
+                        mono_now = int(boot_seconds * 1_000_000)
+                    except Exception:
+                        pass
+                    elapsed = max(0, mono_now - int(v))
+                    info["uptime_seconds"] = elapsed // 1_000_000
     except Exception as e:
         logger.error("Service check error: %s", e)
     return info
