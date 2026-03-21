@@ -158,10 +158,10 @@ textarea.input{resize:vertical;min-height:100px}.input-m{font-family:var(--m);fo
 .fg{margin-bottom:14px}.fl{display:block;font-size:10px;font-weight:600;color:var(--tx3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em}
 
 /* User cards */
-.uc{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:var(--sf);border:1px solid var(--bd);border-radius:var(--r);margin-bottom:8px;transition:border-color .2s}
+.uc{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:var(--sf);border:1px solid var(--bd);border-radius:var(--r);margin-bottom:8px;transition:border-color .2s;gap:10px}
 .uc:hover{border-color:var(--bd2)}
 .ui{display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap}
-@media(max-width:480px){.ui{gap:6px}}
+@media(max-width:640px){.uc{flex-direction:column;align-items:stretch}.uact{justify-content:flex-start;flex-wrap:wrap}}
 .ua{width:36px;height:36px;border-radius:9px;background:linear-gradient(135deg,var(--ac3),var(--ac2));display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;color:#fff;flex-shrink:0}
 .un{font-weight:600;font-size:13px}.up{font-family:var(--m);font-size:11px;color:var(--tx3)}
 .uact{display:flex;gap:4px;flex-shrink:0}

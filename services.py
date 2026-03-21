@@ -48,48 +48,70 @@ def _normalize_client(c):
     }
 
 
-def parse_credentials():
-    clients = []
-    if not CREDS_TOML.exists():
-        return clients
-    raw = _parse_toml_stdlib(CREDS_TOML)
-    if raw is not None:
-        needs_save = any(not c.get("created_at") for c in raw)
-        clients = [_normalize_client(c) for c in raw]
-    else:
-        raw_clients = []
-        current = {}
-        for line in CREDS_TOML.read_text().splitlines():
-            line = line.strip()
-            if line == "[[client]]":
-                if current:
-                    raw_clients.append(current)
-                current = {}
-            elif "=" in line and not line.startswith("#"):
-                k, v = line.split("=", 1)
-                current[k.strip()] = v.strip().strip('"')
-        if current:
-            raw_clients.append(current)
-        needs_save = any(not c.get("created_at") for c in raw_clients)
-        clients = [_normalize_client(c) for c in raw_clients]
-    if needs_save:
-        write_credentials(clients)
-    return clients
-
-
 def write_credentials(clients):
+    from auth import load_panel_db, save_panel_db
     lines = []
+    disabled_store = []
     for c in clients:
         enabled = c.get("enabled", True)
         created = c.get("created_at", "")
-        lines.append("[[client]]")
-        lines.append(f'username = "{c["username"]}"')
-        lines.append(f'password = "{c["password"]}"')
-        if created:
-            lines.append(f'created_at = "{created}"')
-        lines.append(f'enabled = {"true" if enabled else "false"}')
-        lines.append("")
+        if enabled:
+            lines.append("[[client]]")
+            lines.append(f'username = "{c["username"]}"')
+            lines.append(f'password = "{c["password"]}"')
+            if created:
+                lines.append(f'created_at = "{created}"')
+            lines.append("")
+        else:
+            disabled_store.append({
+                "username": c["username"],
+                "password": c["password"],
+                "created_at": created,
+            })
     CREDS_TOML.write_text("\n".join(lines))
+    panel = load_panel_db()
+    panel["disabled_users"] = disabled_store
+    save_panel_db(panel)
+
+
+def parse_credentials():
+    from auth import load_panel_db
+    clients = []
+    if not CREDS_TOML.exists():
+        pass
+    else:
+        raw = _parse_toml_stdlib(CREDS_TOML)
+        if raw is not None:
+            clients = [_normalize_client(c) for c in raw]
+        else:
+            raw_clients = []
+            current = {}
+            for line in CREDS_TOML.read_text().splitlines():
+                line = line.strip()
+                if line == "[[client]]":
+                    if current:
+                        raw_clients.append(current)
+                    current = {}
+                elif "=" in line and not line.startswith("#"):
+                    k, v = line.split("=", 1)
+                    current[k.strip()] = v.strip().strip('"')
+            if current:
+                raw_clients.append(current)
+            clients = [_normalize_client(c) for c in raw_clients]
+    for c in clients:
+        c["enabled"] = True
+    panel = load_panel_db()
+    for d in panel.get("disabled_users", []):
+        clients.append({
+            "username": d["username"],
+            "password": d["password"],
+            "created_at": d.get("created_at", ""),
+            "enabled": False,
+        })
+    needs_save = any(not c.get("created_at") for c in clients)
+    if needs_save:
+        write_credentials(clients)
+    return clients
 
 
 def get_domain():
