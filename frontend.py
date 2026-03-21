@@ -4,8 +4,9 @@ FRONTEND_HTML = r"""<!DOCTYPE html>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=5">
 <title>TrustTunnel Admin</title>
-<link rel="icon" type="image/png" href="/static/favicon.png">
-<link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="64x64" href="/static/favicon.png?v=2">
+<link rel="icon" type="image/png" sizes="32x32" href="/static/icon-32.png?v=2">
+<link rel="apple-touch-icon" href="/static/apple-touch-icon.png?v=2">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" crossorigin="anonymous">
 <script src="/static/qrcode.min.js" defer></script>
 <script src="/static/chart.umd.min.js" defer></script>
@@ -57,6 +58,9 @@ FRONTEND_HTML = r"""<!DOCTYPE html>
 }
 [data-theme="light"] .logo-i,[data-theme="system"] .logo-i{color:#1a1a2e}
 @media(prefers-color-scheme:light){[data-theme="system"] .logo-i{color:#1a1a2e}}
+.logo-img{transition:filter .3s}
+[data-theme="dark"] .logo-img{filter:brightness(0) invert(1)}
+@media(prefers-color-scheme:dark){[data-theme="system"] .logo-img{filter:brightness(0) invert(1)}}
 [data-theme="light"] .toast-ok{background:#f0fdf4;border:1px solid #86efac;color:#16a34a}
 [data-theme="light"] .toast-err{background:#fef2f2;border:1px solid #fca5a5;color:#dc2626}
 @media(prefers-color-scheme:light){
@@ -163,6 +167,9 @@ textarea.input{resize:vertical;min-height:100px}.input-m{font-family:var(--m);fo
 .ui{display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap}
 @media(max-width:640px){.uc{flex-direction:column;align-items:stretch}.uact{justify-content:flex-start;flex-wrap:wrap}}
 .ua{width:36px;height:36px;border-radius:9px;background:linear-gradient(135deg,var(--ac3),var(--ac2));display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;color:#fff;flex-shrink:0}
+.uc-dis{opacity:.55;border-style:dashed}
+.ua-dis{background:var(--tx3)!important}
+.un-dis{text-decoration:line-through;color:var(--tx3)}
 .un{font-weight:600;font-size:13px}.up{font-family:var(--m);font-size:11px;color:var(--tx3)}
 .uact{display:flex;gap:4px;flex-shrink:0}
 
@@ -580,7 +587,7 @@ function _doRender(){
 function renderLogin(){
   var pw;var isS=S.setup;
   var card=h('div',{className:'lw'},h('div',{className:'lc'},
-    h('div',{style:{textAlign:'center',marginBottom:'20px'}},h('img',{src:LOGO_FULL,style:{height:'44px',margin:'0 auto 12px'}})),
+    h('div',{style:{textAlign:'center',marginBottom:'20px'}},h('img',{src:LOGO_FULL,className:'logo-img',style:{height:'44px',margin:'0 auto 12px'}})),
     h('div',{className:'lt'},isS?t('initial_setup'):''),
     h('div',{className:'ls'},isS?t('create_admin_pw'):t('enter_admin_pw')),
     h('div',{className:'fg'},pw=h('input',{className:'input',type:'password',placeholder:t('password'),style:{textAlign:'center'}})),
@@ -608,7 +615,7 @@ function renderApp(){
   return h('div',{className:'app fade-in'},
     h('div',{className:'hdr'},
       h('div',{className:'logo'},
-        h('img',{src:LOGO_FULL,style:{height:'34px'}}),
+        h('img',{src:LOGO_FULL,className:'logo-img',style:{height:'34px'}}),
         h('div',{className:'logo-s',style:{marginLeft:'8px'}},(S.status&&S.status.domain)||'')),
       h('div',{className:'bg'},
         h('div',{className:'lg'},
@@ -836,12 +843,12 @@ function renderUsers(){
     h('div',{id:'user-list'},filtered.map(function(u){return renderUserCard(u)})));
 }
 function renderUserCard(u){var dis=u.enabled===false;var created=u.created_at?u.created_at.replace('T',' ').substring(0,16):'';
-  return h('div',{className:'uc',style:dis?{opacity:'0.5'}:{}},
+  return h('div',{className:'uc'+(dis?' uc-dis':'')},
   h('div',{className:'ui'},
-    h('div',{className:'ua',style:dis?{background:'var(--rd)',opacity:'0.5'}:{}},u.username[0].toUpperCase()),
+    h('div',{className:'ua'+(dis?' ua-dis':'')},u.username[0].toUpperCase()),
     h('div',null,
       h('div',{style:{display:'flex',alignItems:'center',gap:'6px'}},
-        h('span',{className:'un'},u.username),
+        h('span',{className:'un'+(dis?' un-dis':'')},u.username),
         dis?h('span',{className:'badge b-rd',style:{fontSize:'9px'}},t('user_disabled')):null),
       created?h('div',{style:{fontSize:'10px',color:'var(--tx3)',marginTop:'1px'}},t('created_label')+': '+created):null,
       u.password?h('div',{style:{display:'flex',alignItems:'center',gap:'4px',marginTop:'2px'}},
