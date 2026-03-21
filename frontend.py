@@ -816,8 +816,8 @@ function sortUsers(list){
   sorted.sort(function(a,b){
     if(s==='name_asc')return a.username.localeCompare(b.username);
     if(s==='name_desc')return b.username.localeCompare(a.username);
-    if(s==='date_new')return(b.created_at||'').localeCompare(a.created_at||'');
-    if(s==='date_old')return(a.created_at||'').localeCompare(b.created_at||'');
+    if(s==='date_new'){var d=(b.created_at||'').localeCompare(a.created_at||'');return d!==0?d:a.username.localeCompare(b.username)}
+    if(s==='date_old'){var d=(a.created_at||'').localeCompare(b.created_at||'');return d!==0?d:a.username.localeCompare(b.username)}
     return 0});
   return sorted}
 function renderUsers(){
