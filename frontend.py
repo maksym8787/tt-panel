@@ -783,26 +783,6 @@ function renderMonitor(){
           h('thead',null,h('tr',null,h('th',null,t('domain')),h('th',{style:{textAlign:'right'}},t('connections')))),
           h('tbody',null,S.conns.top_destinations.map(function(d){return h('tr',null,h('td',null,d.dst),h('td',{style:{textAlign:'right'}},String(d.count)))})))):null,
 
-    h('div',{className:'grid grid2',style:{gap:'14px'}},
-      S.conns&&S.conns.per_client&&S.conns.per_client.length?
-        expandableCard('per_client',t('traffic_per_client'),
-          h('table',{className:'tbl'},
-            h('thead',null,h('tr',null,h('th',null,t('client_ip')),h('th',null,t('location')),h('th',null,t('isp')),h('th',{style:{textAlign:'right'}},t('conn')),h('th',null,t('last_seen')))),
-            h('tbody',null,S.conns.per_client.map(function(c){var g=c.geo||{};return h('tr',null,
-              h('td',{style:{color:'var(--tx)',fontFamily:'var(--m)',fontSize:'11px'}},c.ip),
-              h('td',null,g.flag?(g.flag+' '):'',g.city?(g.city+', '):'',(g.country||'')),
-              h('td',{style:{fontSize:'10px',color:'var(--tx2)'}},g.isp||'\u2014'),
-              h('td',{style:{textAlign:'right'}},String(c.connections)),
-              h('td',null,ago(c.last_seen)))})),{margin:0})):h('div',{className:'card',style:{margin:0}},h('div',{style:{color:'var(--tx3)',fontSize:'12px',textAlign:'center',padding:'16px'}},t('no_client_data'))),
-      S.conns&&S.conns.top_ports&&S.conns.top_ports.length?
-        expandableCard('top_ports',t('port_breakdown'),
-          h('table',{className:'tbl'},
-            h('thead',null,h('tr',null,h('th',null,t('port')),h('th',null,t('svc_name')),h('th',{style:{textAlign:'right'}},t('count')))),
-            h('tbody',null,S.conns.top_ports.map(function(p){var svc=p.port==='443'?'HTTPS':p.port==='80'?'HTTP':p.port==='53'?'DNS':p.port==='853'?'DoT':'';return h('tr',null,
-              h('td',{style:{fontFamily:'var(--m)'}},p.port),
-              h('td',null,svc?h('span',{className:'badge b-bl'},svc):''),
-              h('td',{style:{textAlign:'right'}},String(p.count)))})),{margin:0})):h('div',{className:'card',style:{margin:0}},h('div',{style:{color:'var(--tx3)',fontSize:'12px',textAlign:'center',padding:'16px'}},t('no_port_data')))),
-
     h('div',{style:{display:'flex',justifyContent:'space-between',fontSize:'10px',color:'var(--tx3)',fontFamily:'var(--m)',marginTop:'8px',padding:'0 4px'}},
       S.conns&&S.conns.unique_ips?h('span',null,t('unique_ips')+': '+S.conns.unique_ips.length):null,
       S.dbSize?h('span',null,'DB: '+S.dbSize.db_mb+' MB | Log: '+S.dbSize.log_mb+' MB'):null)
