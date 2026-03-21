@@ -121,7 +121,7 @@ async def auth_status(request: Request):
 async def list_users(request: Request):
     await require_auth(request)
     clients = await asyncio.to_thread(parse_credentials)
-    return {"users": [{"username": c["username"], "password": c.get("password", "")} for c in clients]}
+    return {"users": [{"username": c["username"], "password": c.get("password", ""), "enabled": c.get("enabled", True), "created_at": c.get("created_at", "")} for c in clients]}
 
 
 @app.post("/api/users")
