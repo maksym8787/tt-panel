@@ -385,13 +385,10 @@ async function doLogout(){await api('/logout',{method:'POST'});S.auth=false;R()}
 
 // ─── Data loaders ───────────────────────────────────────
 async function loadAll(){
-  var p1=_loadDash().then(function(){R()});
-  var p2=_loadSummary().then(function(){R()});
-  var p3=_checkPendingReload();
-  var p4=_loadTraffic().then(function(){R();drawDashCharts()});
-  await Promise.all([p1,p2,p3,p4])
+  await Promise.all([_loadDash(),_loadSummary(),_checkPendingReload(),_loadTraffic()]);
+  R(drawDashCharts)
 }
-function drawDashCharts(){if(!window.Chart){setTimeout(drawDashCharts,200);return}setTimeout(drawTrafficChart,30)}
+function drawDashCharts(){if(!window.Chart){setTimeout(drawDashCharts,200);return}drawTrafficChart()}
 async function loadDash(){await _loadDash();R()}
 async function _loadDash(){try{var p=await Promise.all([api('/status'),api('/users')]);S.status=p[0];S.users=p[1].users}catch(e){toast(e.message,true)}await _loadActiveIps()}
 async function _loadSummary(){try{S.summary=await api('/monitoring/summary')}catch(e){}}
@@ -402,25 +399,19 @@ async function _loadOnline(){try{S.online=await api('/monitoring/online')}catch(
 async function _loadDbSize(){try{S.dbSize=await api('/monitoring/db-size')}catch(e){}}
 async function _loadActiveIps(){try{var r=await api('/active-ips');S.activeIps=r.active_ips||{}}catch(e){}}
 async function _checkPendingReload(){try{var r=await api('/pending-reload');S.pendingReload=r.pending}catch(e){}}
-async function loadHistory(h){await _loadHistory(h);R();setTimeout(drawAllCharts,80)}
+async function loadHistory(h){await _loadHistory(h);R(drawAllCharts)}
 async function _loadTraffic(d){try{S.traffic=await api('/monitoring/traffic?days='+(d||7))}catch(e){}}
-async function loadTraffic(d){await _loadTraffic(d);R();setTimeout(drawTrafficChart,80)}
+async function loadTraffic(d){await _loadTraffic(d);R(drawTrafficChart)}
 async function loadConns(h){await _loadConns(h);R()}
 async function loadOnline(){await _loadOnline();R()}
 async function loadLogs(){S.logsLoading=true;R();try{var r=await api('/logs?lines=200');S.logs=r.logs||'(empty log file)'}catch(e){S.logs='Error: '+e.message;toast(e.message,true)}S.logsLoading=false;R()}
 async function loadSettings(){try{S.settings=await api('/settings')}catch(e){toast(e.message,true)}R()}
 async function loadMonitorAll(){
   S.monLoading=true;R();
-  var p1=_loadHistory().then(function(){R();drawMonitorCharts()});
-  var p2=_loadTraffic().then(function(){R();drawMonitorCharts()});
-  var p3=_loadConnTimeline().then(function(){R();drawMonitorCharts()});
-  var p4=_loadOnline().then(function(){R()});
-  var p5=_loadConns().then(function(){R()});
-  var p6=_loadDbSize().then(function(){R()});
-  await Promise.all([p1,p2,p3,p4,p5,p6]);
-  S.monLoading=false;R();drawMonitorCharts()
+  await Promise.all([_loadHistory(),_loadTraffic(),_loadConnTimeline(),_loadOnline(),_loadConns(),_loadDbSize()]);
+  S.monLoading=false;R(drawMonitorCharts)
 }
-function drawMonitorCharts(){if(!window.Chart){setTimeout(drawMonitorCharts,200);return}setTimeout(function(){drawAllCharts();drawTrafficChart();drawConnChart()},30)}
+function drawMonitorCharts(){if(!window.Chart){setTimeout(drawMonitorCharts,200);return}drawAllCharts();drawTrafficChart();drawConnChart()}
 
 // ─── User actions (#14 modal dialogs, #15 loading) ──────
 async function addUser(u,p){try{var r=await api('/users',{method:'POST',body:JSON.stringify({username:u,password:p})});toast(t('user_created')+' "'+u+'" ('+t('pass_label')+': '+r.password+')');S.modal=null;loadDash()}catch(e){toast(e.message,true)}}
@@ -530,10 +521,11 @@ function periodSelector(current,periods,onChange){
   return h('div',{className:'periods'},btns)}
 
 // ─── Render ─────────────────────────────────────────────
-function R(){
+var _rTimer=null;var _rCallbacks=[];
+function R(cb){if(cb)_rCallbacks.push(cb);if(_rTimer)return;_rTimer=requestAnimationFrame(function(){_rTimer=null;_doRender();var cbs=_rCallbacks.slice();_rCallbacks=[];for(var i=0;i<cbs.length;i++)cbs[i]()})}
+function _doRender(){
   var root=document.getElementById('root');
   try{
-  // Chart instances are cleaned up by updateChart() when canvas is detached
   root.innerHTML='';
   if(S.toast)root.appendChild(h('div',{className:'toast '+(S.toast.e?'toast-err':'toast-ok')},S.toast.m));
   if(S.modal)root.appendChild(renderModal());
@@ -924,8 +916,8 @@ checkAuth();
 // (#12) Auto-refresh pause when tab hidden
 var _refreshDash,_refreshMon;
 function startRefreshTimers(){
-  _refreshDash=setInterval(async function(){if(S.auth&&S.tab==='dashboard'){_loadDash().then(function(){R()});_loadSummary().then(function(){R()});_checkPendingReload();_loadTraffic().then(function(){R();drawDashCharts()})}},15000);
-  _refreshMon=setInterval(async function(){if(S.auth&&S.tab==='monitor'){_loadHistory().then(function(){R();drawMonitorCharts()});_loadTraffic().then(function(){R();drawMonitorCharts()});_loadConnTimeline().then(function(){R();drawMonitorCharts()});_loadOnline().then(function(){R();_updateMonitorNonChart()});_loadConns().then(function(){R()})}},30000);
+  _refreshDash=setInterval(async function(){if(S.auth&&S.tab==='dashboard'){await Promise.all([_loadDash(),_loadSummary(),_checkPendingReload(),_loadTraffic()]);R(drawDashCharts)}},15000);
+  _refreshMon=setInterval(async function(){if(S.auth&&S.tab==='monitor'){await Promise.all([_loadHistory(),_loadTraffic(),_loadConnTimeline(),_loadOnline(),_loadConns()]);R(function(){drawMonitorCharts();_updateMonitorNonChart()})}},30000);
 }
 function stopRefreshTimers(){if(_refreshDash){clearInterval(_refreshDash);_refreshDash=null}if(_refreshMon){clearInterval(_refreshMon);_refreshMon=null}}
 startRefreshTimers();
