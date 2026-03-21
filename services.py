@@ -283,17 +283,30 @@ def _do_deferred_reload():
         logger.error("Service reload error: %s", e)
 
 
+def _get_tt_listen_port():
+    try:
+        if VPN_TOML.exists():
+            for line in VPN_TOML.read_text().splitlines():
+                if "listen_port" in line and "=" in line:
+                    val = line.split("=", 1)[1].strip().strip('"').strip("'")
+                    return int(val)
+    except Exception:
+        pass
+    return 443
+
+
 def kill_client_sessions(client_ips):
     if not client_ips:
         return
+    port = _get_tt_listen_port()
     for ip in client_ips:
         try:
             subprocess.run(
                 ["ss", "--kill", "state", "established",
-                 f"src {ip}"],
+                 f"dst {ip}", f"sport = :{port}"],
                 capture_output=True, timeout=5
             )
-            logger.info("Killed sessions from IP %s", ip)
+            logger.info("Killed TT sessions from IP %s (port %d)", ip, port)
         except Exception as e:
             logger.warning("Failed to kill session for %s: %s", ip, e)
 
