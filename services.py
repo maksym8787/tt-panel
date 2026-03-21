@@ -39,10 +39,11 @@ def _parse_toml_stdlib(path: Path) -> list:
 
 
 def _normalize_client(c):
+    from datetime import datetime
     return {
         "username": c.get("username", ""),
         "password": c.get("password", ""),
-        "created_at": c.get("created_at", ""),
+        "created_at": c.get("created_at", "") or datetime.now().isoformat(timespec="seconds"),
         "enabled": c.get("enabled", True) if isinstance(c.get("enabled"), bool) else str(c.get("enabled", "true")).lower() != "false",
     }
 
@@ -51,21 +52,28 @@ def parse_credentials():
     clients = []
     if not CREDS_TOML.exists():
         return clients
-    result = _parse_toml_stdlib(CREDS_TOML)
-    if result is not None:
-        return [_normalize_client(c) for c in result]
-    current = {}
-    for line in CREDS_TOML.read_text().splitlines():
-        line = line.strip()
-        if line == "[[client]]":
-            if current:
-                clients.append(_normalize_client(current))
-            current = {}
-        elif "=" in line and not line.startswith("#"):
-            k, v = line.split("=", 1)
-            current[k.strip()] = v.strip().strip('"')
-    if current:
-        clients.append(_normalize_client(current))
+    raw = _parse_toml_stdlib(CREDS_TOML)
+    if raw is not None:
+        needs_save = any(not c.get("created_at") for c in raw)
+        clients = [_normalize_client(c) for c in raw]
+    else:
+        raw_clients = []
+        current = {}
+        for line in CREDS_TOML.read_text().splitlines():
+            line = line.strip()
+            if line == "[[client]]":
+                if current:
+                    raw_clients.append(current)
+                current = {}
+            elif "=" in line and not line.startswith("#"):
+                k, v = line.split("=", 1)
+                current[k.strip()] = v.strip().strip('"')
+        if current:
+            raw_clients.append(current)
+        needs_save = any(not c.get("created_at") for c in raw_clients)
+        clients = [_normalize_client(c) for c in raw_clients]
+    if needs_save:
+        write_credentials(clients)
     return clients
 
 
