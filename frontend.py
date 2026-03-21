@@ -58,7 +58,7 @@ FRONTEND_HTML = r"""<!DOCTYPE html>
 }
 [data-theme="light"] .logo-i,[data-theme="system"] .logo-i{color:#1a1a2e}
 @media(prefers-color-scheme:light){[data-theme="system"] .logo-i{color:#1a1a2e}}
-.logo-img{transition:filter .3s}
+.logo-img{transition:filter .3s;object-fit:contain}
 [data-theme="dark"] .logo-img{filter:brightness(0) invert(1)}
 @media(prefers-color-scheme:dark){[data-theme="system"] .logo-img{filter:brightness(0) invert(1)}}
 [data-theme="light"] .toast-ok{background:#f0fdf4;border:1px solid #86efac;color:#16a34a}
@@ -587,7 +587,7 @@ function _doRender(){
 function renderLogin(){
   var pw;var isS=S.setup;
   var card=h('div',{className:'lw'},h('div',{className:'lc'},
-    h('div',{style:{textAlign:'center',marginBottom:'20px'}},h('img',{src:LOGO_FULL,className:'logo-img',style:{height:'44px',margin:'0 auto 12px'}})),
+    h('div',{style:{textAlign:'center',marginBottom:'20px'}},h('img',{src:LOGO_FULL,className:'logo-img',style:{height:'44px',width:'auto',margin:'0 auto 12px'}})),
     h('div',{className:'lt'},isS?t('initial_setup'):''),
     h('div',{className:'ls'},isS?t('create_admin_pw'):t('enter_admin_pw')),
     h('div',{className:'fg'},pw=h('input',{className:'input',type:'password',placeholder:t('password'),style:{textAlign:'center'}})),
