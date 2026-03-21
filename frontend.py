@@ -549,16 +549,18 @@ function paginatedList(key,items,renderFn,pageSize){
       h('button',{className:'btn btn-xs',disabled:page>=pages-1,onClick:function(){_pageState[key]=page+1;R()}},'\u25B6')))
 }
 
-// ─── Collapsible card ────────────────────────────────────
-var _collapseState={};
-function collapsibleCard(key,title,content,startOpen,extraStyle){
-  if(_collapseState[key]===undefined)_collapseState[key]=!!startOpen;
-  var open=_collapseState[key];
+// ─── Expandable card ─────────────────────────────────────
+var _expandState={};
+function expandableCard(key,title,content,extraStyle){
+  var open=!!_expandState[key];
+  var wrap=h('div',{style:open?{}:{maxHeight:'220px',overflow:'hidden',position:'relative'}},content);
+  if(!open){wrap.appendChild(h('div',{style:{position:'absolute',bottom:0,left:0,right:0,height:'60px',background:'linear-gradient(transparent,var(--sf))',pointerEvents:'none'}}))}
   return h('div',{className:'card',style:extraStyle||{}},
-    h('div',{className:'card-t',style:{cursor:'pointer',userSelect:'none'},onClick:function(){_collapseState[key]=!open;R()}},
-      h('span',null,title),
-      h('span',{style:{marginLeft:'auto',fontSize:'10px',color:'var(--tx3)',transition:'transform .2s',display:'inline-block',transform:open?'rotate(180deg)':'rotate(0)'}},'\u25BC')),
-    open?content:null)
+    h('div',{className:'card-t'},h('span',null,title)),
+    wrap,
+    h('div',{style:{textAlign:'center',paddingTop:'6px'}},
+      h('button',{className:'btn btn-xs',style:{fontSize:'10px'},onClick:function(){_expandState[key]=!open;R()}},
+        open?t('show_less'):t('show_more'))))
 }
 
 // ─── Render ─────────────────────────────────────────────
@@ -759,9 +761,11 @@ function renderMonitor(){
         h('div',{style:{fontSize:'10px',fontWeight:'600',color:'var(--tx3)',textTransform:'uppercase',letterSpacing:'.05em',marginBottom:'8px'}},t('recently_active')),
         h('div',{style:{display:'flex',flexWrap:'wrap',gap:'6px'}},S.online.recently_active.slice(0,20).map(function(u){var g=u.geo||{};return h('span',{className:'badge b-bl',style:{fontSize:'11px'}},(g.flag?g.flag+' ':'')+u.ip)}))):null),
 
-    collapsibleCard('conn_log',h('span',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',width:'100%'}},
+    h('div',{className:'card'},
+      h('div',{className:'card-t'},
         h('span',null,t('connection_log')),
-        periodSelector(S.connPeriod,[{v:1,l:'1h'},{v:6,l:'6h'},{v:24,l:'24h'},{v:168,l:'7d'}],function(v){loadConns(v)})),
+        h('div',{className:'right'},
+          periodSelector(S.connPeriod,[{v:1,l:'1h'},{v:6,l:'6h'},{v:24,l:'24h'},{v:168,l:'7d'}],function(v){loadConns(v)}))),
       S.conns&&S.conns.connections&&S.conns.connections.length?h('div',null,
         h('table',{className:'tbl'},
           h('thead',null,h('tr',null,h('th',null,t('time')),h('th',null,t('ip')),h('th',null,t('user_agent')),h('th',null,t('destination')),h('th',null,t('event')))),
@@ -774,14 +778,14 @@ function renderMonitor(){
         h('div',{style:{color:'var(--tx3)',fontSize:'12px',textAlign:'center',padding:'16px'}},t('no_conn_data'))),
 
     S.conns&&S.conns.top_destinations&&S.conns.top_destinations.length?
-      collapsibleCard('top_dst',t('top_destinations'),
+      expandableCard('top_dst',t('top_destinations'),
         h('table',{className:'tbl'},
           h('thead',null,h('tr',null,h('th',null,t('domain')),h('th',{style:{textAlign:'right'}},t('connections')))),
           h('tbody',null,S.conns.top_destinations.map(function(d){return h('tr',null,h('td',null,d.dst),h('td',{style:{textAlign:'right'}},String(d.count)))})))):null,
 
     h('div',{className:'grid grid2',style:{gap:'14px'}},
       S.conns&&S.conns.per_client&&S.conns.per_client.length?
-        collapsibleCard('per_client',t('traffic_per_client'),
+        expandableCard('per_client',t('traffic_per_client'),
           h('table',{className:'tbl'},
             h('thead',null,h('tr',null,h('th',null,t('client_ip')),h('th',null,t('location')),h('th',null,t('isp')),h('th',{style:{textAlign:'right'}},t('conn')),h('th',null,t('last_seen')))),
             h('tbody',null,S.conns.per_client.map(function(c){var g=c.geo||{};return h('tr',null,
@@ -789,15 +793,15 @@ function renderMonitor(){
               h('td',null,g.flag?(g.flag+' '):'',g.city?(g.city+', '):'',(g.country||'')),
               h('td',{style:{fontSize:'10px',color:'var(--tx2)'}},g.isp||'\u2014'),
               h('td',{style:{textAlign:'right'}},String(c.connections)),
-              h('td',null,ago(c.last_seen)))})),false,{margin:0})):h('div',{className:'card',style:{margin:0}},h('div',{style:{color:'var(--tx3)',fontSize:'12px',textAlign:'center',padding:'16px'}},t('no_client_data'))),
+              h('td',null,ago(c.last_seen)))})),{margin:0})):h('div',{className:'card',style:{margin:0}},h('div',{style:{color:'var(--tx3)',fontSize:'12px',textAlign:'center',padding:'16px'}},t('no_client_data'))),
       S.conns&&S.conns.top_ports&&S.conns.top_ports.length?
-        collapsibleCard('top_ports',t('port_breakdown'),
+        expandableCard('top_ports',t('port_breakdown'),
           h('table',{className:'tbl'},
             h('thead',null,h('tr',null,h('th',null,t('port')),h('th',null,t('svc_name')),h('th',{style:{textAlign:'right'}},t('count')))),
             h('tbody',null,S.conns.top_ports.map(function(p){var svc=p.port==='443'?'HTTPS':p.port==='80'?'HTTP':p.port==='53'?'DNS':p.port==='853'?'DoT':'';return h('tr',null,
               h('td',{style:{fontFamily:'var(--m)'}},p.port),
               h('td',null,svc?h('span',{className:'badge b-bl'},svc):''),
-              h('td',{style:{textAlign:'right'}},String(p.count)))})),false,{margin:0})):h('div',{className:'card',style:{margin:0}},h('div',{style:{color:'var(--tx3)',fontSize:'12px',textAlign:'center',padding:'16px'}},t('no_port_data')))),
+              h('td',{style:{textAlign:'right'}},String(p.count)))})),{margin:0})):h('div',{className:'card',style:{margin:0}},h('div',{style:{color:'var(--tx3)',fontSize:'12px',textAlign:'center',padding:'16px'}},t('no_port_data')))),
 
     h('div',{style:{display:'flex',justifyContent:'space-between',fontSize:'10px',color:'var(--tx3)',fontFamily:'var(--m)',marginTop:'8px',padding:'0 4px'}},
       S.conns&&S.conns.unique_ips?h('span',null,t('unique_ips')+': '+S.conns.unique_ips.length):null,
