@@ -270,6 +270,7 @@ en:{
   user:'user',users_pl:'users',add_user:'+ Add user',
   active_ip:'active IP',active_ips:'active IPs',
   search_users:'Search users...',
+  sort_name_az:'Name A\u2192Z',sort_name_za:'Name Z\u2192A',sort_date_new:'Newest first',sort_date_old:'Oldest first',
   add_vpn_user:'Add VPN user',username:'Username',
   password:'Password',password_empty_auto:'Password (empty = auto-generate)',
   create:'Create',cancel:'Cancel',close:'Close',copy:'Copy',copied:'Copied!',
@@ -329,6 +330,7 @@ ru:{
   user:'\u043f\u043e\u043b\u044c\u0437.',users_pl:'\u043f\u043e\u043b\u044c\u0437.',add_user:'+ \u0414\u043e\u0431\u0430\u0432\u0438\u0442\u044c',
   active_ip:'\u0430\u043a\u0442\u0438\u0432\u043d\u044b\u0439 IP',active_ips:'\u0430\u043a\u0442\u0438\u0432\u043d\u044b\u0445 IP',
   search_users:'\u041f\u043e\u0438\u0441\u043a \u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u0435\u0439...',
+  sort_name_az:'\u0418\u043c\u044f \u0410\u2192\u042f',sort_name_za:'\u0418\u043c\u044f \u042f\u2192\u0410',sort_date_new:'\u0421\u043d\u0430\u0447\u0430\u043b\u0430 \u043d\u043e\u0432\u044b\u0435',sort_date_old:'\u0421\u043d\u0430\u0447\u0430\u043b\u0430 \u0441\u0442\u0430\u0440\u044b\u0435',
   add_vpn_user:'\u0414\u043e\u0431\u0430\u0432\u0438\u0442\u044c VPN \u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u044f',username:'\u0418\u043c\u044f \u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u044f',
   password:'\u041f\u0430\u0440\u043e\u043b\u044c',password_empty_auto:'\u041f\u0430\u0440\u043e\u043b\u044c (\u043f\u0443\u0441\u0442\u043e = \u0430\u0432\u0442\u043e)',
   create:'\u0421\u043e\u0437\u0434\u0430\u0442\u044c',cancel:'\u041e\u0442\u043c\u0435\u043d\u0430',close:'\u0417\u0430\u043a\u0440\u044b\u0442\u044c',copy:'\u041a\u043e\u043f\u0438\u0440\u043e\u0432\u0430\u0442\u044c',copied:'\u0421\u043a\u043e\u043f\u0438\u0440\u043e\u0432\u0430\u043d\u043e!',
@@ -366,7 +368,7 @@ function setTheme(th){S.theme=th;localStorage.setItem('tt_theme',th);applyTheme(
 function applyTheme(){document.documentElement.setAttribute('data-theme',S.theme)}
 var S={auth:false,setup:false,loading:true,tab:'dashboard',status:null,users:[],logs:null,settings:{},
   history:null,traffic:null,conns:null,online:null,summary:null,toast:null,modal:null,dbSize:null,
-  connTimeline:null,activeIps:{},monPeriod:24,connPeriod:24,pendingReload:false,userFilter:'',monLoading:false,logsLoading:false,
+  connTimeline:null,activeIps:{},monPeriod:24,connPeriod:24,pendingReload:false,userFilter:'',userSort:'name_asc',monLoading:false,logsLoading:false,
   lang:localStorage.getItem('tt_lang')||'en',theme:localStorage.getItem('tt_theme')||'system'};
 
 // ─── API ────────────────────────────────────────────────
@@ -423,7 +425,7 @@ async function loadMonitorAll(){
 function drawMonitorCharts(){if(!window.Chart){setTimeout(drawMonitorCharts,200);return}drawAllCharts();drawTrafficChart();drawConnChart()}
 
 // ─── User actions (#14 modal dialogs, #15 loading) ──────
-async function toggleUser(u,btn){await withLoading(btn,async function(){try{var r=await api('/users/'+u+'/toggle',{method:'PUT'});toast(r.enabled?t('user_enabled'):t('user_disabled'));loadDash()}catch(e){toast(e.message,true)}})}
+async function toggleUser(u,btn){await withLoading(btn,async function(){try{var r=await api('/users/'+u+'/toggle',{method:'PUT'});var user=S.users.find(function(x){return x.username===u});if(user)user.enabled=r.enabled;toast(r.enabled?t('user_enabled'):t('user_disabled'));R()}catch(e){toast(e.message,true)}})}
 function copyPassword(pw){navigator.clipboard.writeText(pw).then(function(){toast(t('copied'))}).catch(function(){toast('Copy failed',true)})}
 async function addUser(u,p){try{var r=await api('/users',{method:'POST',body:JSON.stringify({username:u,password:p})});toast(t('user_created')+' "'+u+'" ('+t('pass_label')+': '+r.password+')');S.modal=null;loadDash()}catch(e){toast(e.message,true)}}
 async function deleteUser(u){S.modal={t:'confirm',title:t('delete_user'),msg:t('delete_confirm')+' "'+u+'"?',onConfirm:async function(btn){await withLoading(btn,async function(){try{await api('/users/'+u,{method:'DELETE'});toast(t('deleted'));S.modal=null;loadDash()}catch(e){toast(e.message,true)}})}};R()}
@@ -802,16 +804,28 @@ function renderMonitor(){
 }
 
 // ─── Users (#18 search filter) ──────────────────────────
+function sortUsers(list){
+  var s=S.userSort;var sorted=list.slice();
+  sorted.sort(function(a,b){
+    if(s==='name_asc')return a.username.localeCompare(b.username);
+    if(s==='name_desc')return b.username.localeCompare(a.username);
+    if(s==='date_new')return(b.created_at||'').localeCompare(a.created_at||'');
+    if(s==='date_old')return(a.created_at||'').localeCompare(b.created_at||'');
+    return 0});
+  return sorted}
 function renderUsers(){
   var aips=Object.keys(S.activeIps||{});
   var aipCount=aips.length;
   var filtered=S.users;
   if(S.userFilter){var f=S.userFilter.toLowerCase();filtered=S.users.filter(function(u){return u.username.toLowerCase().indexOf(f)!==-1})}
+  filtered=sortUsers(filtered);
+  var sortOpts=[{v:'name_asc',l:t('sort_name_az')},{v:'name_desc',l:t('sort_name_za')},{v:'date_new',l:t('sort_date_new')},{v:'date_old',l:t('sort_date_old')}];
   return h('div',{className:'fade-in'},
     h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'16px',gap:'12px',flexWrap:'wrap'}},
       h('div',{style:{fontSize:'13px',fontWeight:'600'}},S.users.length+' '+(S.users.length!==1?t('users_pl'):t('user'))),
       h('div',{className:'bg',style:{flex:'1',justifyContent:'flex-end'}},
-        h('input',{className:'input',placeholder:t('search_users'),style:{maxWidth:'200px',padding:'6px 12px',fontSize:'12px'},id:'user-search',value:S.userFilter||'',onInput:function(e){S.userFilter=e.target.value;var ul=document.getElementById('user-list');if(ul){ul.innerHTML='';var f=S.userFilter.toLowerCase();S.users.filter(function(u){return !f||u.username.toLowerCase().indexOf(f)!==-1}).forEach(function(u){ul.appendChild(renderUserCard(u))})}}}),
+        h('select',{className:'input',style:{maxWidth:'160px',padding:'6px 8px',fontSize:'11px'},value:S.userSort,onChange:function(e){S.userSort=e.target.value;R()}},sortOpts.map(function(o){return h('option',{value:o.v},o.l)})),
+        h('input',{className:'input',placeholder:t('search_users'),style:{maxWidth:'200px',padding:'6px 12px',fontSize:'12px'},id:'user-search',value:S.userFilter||'',onInput:function(e){S.userFilter=e.target.value;R()}}),
         h('button',{className:'btn btn-p btn-sm',onClick:function(){S.modal={t:'add'};R()}},t('add_user')))),
     aipCount?h('div',{className:'card',style:{marginBottom:'14px'}},
       h('div',{className:'card-t'},h('span',null,aipCount+' '+(aipCount!==1?t('active_ips'):t('active_ip')))),
