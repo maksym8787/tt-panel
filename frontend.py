@@ -228,6 +228,8 @@ textarea.input{resize:vertical;min-height:100px}.input-m{font-family:var(--m);fo
 
 @keyframes spin{to{transform:rotate(360deg)}}
 .spinner{width:16px;height:16px;border:2px solid var(--bd);border-top-color:var(--ac);border-radius:50%;animation:spin .6s linear infinite}
+.spinner-lg{width:28px;height:28px;border-width:2.5px}
+.loading-box{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:60px 0;color:var(--tx3);font-size:13px;font-weight:500;letter-spacing:.02em}
 
 /* (#17) Apply changes banner */
 .apply-bar{background:var(--orbg);border:1px solid rgba(245,158,11,.25);border-radius:var(--r2);padding:10px 16px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;font-size:12px;color:var(--or)}
@@ -354,7 +356,7 @@ function setTheme(th){S.theme=th;localStorage.setItem('tt_theme',th);applyTheme(
 function applyTheme(){document.documentElement.setAttribute('data-theme',S.theme)}
 var S={auth:false,setup:false,loading:true,tab:'dashboard',status:null,users:[],logs:null,settings:{},
   history:null,traffic:null,conns:null,online:null,summary:null,toast:null,modal:null,dbSize:null,
-  connTimeline:null,activeIps:{},monPeriod:24,connPeriod:24,pendingReload:false,userFilter:'',monLoading:false,
+  connTimeline:null,activeIps:{},monPeriod:24,connPeriod:24,pendingReload:false,userFilter:'',monLoading:false,logsLoading:false,
   lang:localStorage.getItem('tt_lang')||'en',theme:localStorage.getItem('tt_theme')||'system'};
 
 // ─── API ────────────────────────────────────────────────
@@ -399,7 +401,7 @@ async function _loadTraffic(d){try{S.traffic=await api('/monitoring/traffic?days
 async function loadTraffic(d){await _loadTraffic(d);R();setTimeout(drawTrafficChart,80)}
 async function loadConns(h){await _loadConns(h);R()}
 async function loadOnline(){await _loadOnline();R()}
-async function loadLogs(){S.logs='Loading...';R();try{var r=await api('/logs?lines=200');S.logs=r.logs||'(empty log file)'}catch(e){S.logs='Error: '+e.message;toast(e.message,true)}R()}
+async function loadLogs(){S.logsLoading=true;R();try{var r=await api('/logs?lines=200');S.logs=r.logs||'(empty log file)'}catch(e){S.logs='Error: '+e.message;toast(e.message,true)}S.logsLoading=false;R()}
 async function loadSettings(){try{S.settings=await api('/settings')}catch(e){toast(e.message,true)}R()}
 function _waitChart(){return window.Chart?Promise.resolve():new Promise(function(ok){var tries=0;var iv=setInterval(function(){tries++;if(window.Chart){clearInterval(iv);ok()}else if(tries>50){clearInterval(iv);ok()}},100)})}
 async function loadMonitorAll(){S.monLoading=true;R();await Promise.all([_loadHistory(),_loadTraffic(),_loadConnTimeline(),_loadOnline(),_loadConns(),_loadDbSize()]);S.monLoading=false;R();drawMonitorCharts()}
@@ -505,6 +507,8 @@ function drawConnChart(){
 function h(t,a){var e=document.createElement(t);if(a){var keys=Object.keys(a);for(var ki=0;ki<keys.length;ki++){var k=keys[ki],v=a[k];if(k==='style'&&typeof v==='object')Object.assign(e.style,v);else if(k.substr(0,2)==='on')e.addEventListener(k.slice(2).toLowerCase(),v);else if(k==='className')e.className=v;else if(k==='innerHTML')e.innerHTML=v;else e.setAttribute(k,v)}}for(var i=2;i<arguments.length;i++){var x=arguments[i];if(Array.isArray(x)){for(var j=0;j<x.length;j++)appendNode(e,x[j])}else{appendNode(e,x)}}return e}
 function appendNode(e,x){if(x==null||x===false||x===undefined)return;if(typeof x==='number')x=String(x);if(typeof x==='string')e.appendChild(document.createTextNode(x));else if(x.nodeType)e.appendChild(x);else if(Array.isArray(x)){for(var i=0;i<x.length;i++)appendNode(e,x[i])}}
 
+function loadingView(full){return h('div',{className:'loading-box',style:full?{minHeight:'60vh'}:{}},h('div',{className:'spinner'+(full?' spinner-lg':'')}),t('loading'))}
+
 // ─── Period selector component ──────────────────────────
 function periodSelector(current,periods,onChange){
   var btns=[];for(var i=0;i<periods.length;i++){(function(p){btns.push(h('button',{className:'per'+(current===p.v?' on':''),onClick:function(){onChange(p.v)}},p.l))})(periods[i])}
@@ -518,8 +522,7 @@ function R(){
   root.innerHTML='';
   if(S.toast)root.appendChild(h('div',{className:'toast '+(S.toast.e?'toast-err':'toast-ok')},S.toast.m));
   if(S.modal)root.appendChild(renderModal());
-  if(S.loading)return root.appendChild(h('div',{style:{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'100vh',color:'var(--tx3)',fontSize:'14px',gap:'8px'}},
-    h('img',{src:LOGO_ICON,style:{width:'28px',height:'28px'}}),' '+t('loading')));
+  if(S.loading)return root.appendChild(loadingView(true));
   if(!S.auth)return root.appendChild(renderLogin());
   root.appendChild(renderApp());
   }catch(err){var msg=String(err.message||err).replace(/\x3c/g,'&lt;');root.innerHTML='\x3cdiv style="color:#ef4444;padding:40px;font-family:monospace;font-size:13px"\x3e\x3cb\x3eRender error:\x3c/b\x3e\x3cbr\x3e\x3cpre\x3e'+msg+'\x3c/pre\x3e\x3c/div\x3e';console.error('R() error:',err)}
@@ -591,7 +594,7 @@ function mkVpsStat(label,pct,unit,color,sub){
 }
 
 function renderDash(){
-  var s=S.status;if(!s){loadAll();return h('div',{style:{color:'var(--tx3)',padding:'40px',textAlign:'center'}},t('loading'))}
+  var s=S.status;if(!s){loadAll();return loadingView()}
   var l=s.live||{};var cert=s.certificate;var sm=S.summary;
   var certDays=cert?cert.days:null;var certClass=certDays!=null?(certDays<14?'off':certDays<30?'warn':'on'):'';
 
@@ -667,9 +670,7 @@ function renderDash(){
 function renderMonitor(){
   var periods=[{v:1,l:'1h'},{v:6,l:'6h'},{v:24,l:'24h'},{v:168,l:'7d'}];
 
-  if(S.monLoading&&!S.history){return h('div',{className:'fade-in'},
-    h('div',{style:{display:'flex',justifyContent:'center',alignItems:'center',padding:'80px 0',color:'var(--tx3)',fontSize:'13px',gap:'8px'}},
-      h('div',{className:'spinner'}),'Loading...'))}
+  if(S.monLoading&&!S.history){return h('div',{className:'fade-in'},loadingView())}
 
   return h('div',{className:'fade-in'},
     h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'14px'}},
@@ -801,7 +802,7 @@ function renderUserCard(u){return h('div',{className:'uc'},
 
 // ─── Settings ───────────────────────────────────────────
 function renderSettings(){
-  var s=S.settings;if(!s.vpn_toml&&s.vpn_toml!==''){loadSettings();return h('div',{style:{color:'var(--tx3)'}},t('loading'))}
+  var s=S.settings;if(!s.vpn_toml&&s.vpn_toml!==''){loadSettings();return loadingView()}
   var va,ra;
   return h('div',{className:'fade-in'},
     h('div',{className:'card'},h('div',{className:'card-t'},'vpn.toml'),
@@ -820,7 +821,7 @@ function renderLogs(){
     h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'12px'}},
       h('div',{style:{fontSize:'13px',fontWeight:'600'}},t('service_logs')),
       h('button',{className:'btn btn-sm',onClick:loadLogs},t('refresh'))),
-    h('div',{className:'lb'},S.logs===null?t('click_refresh'):S.logs===''?'(empty log file)':S.logs));
+    S.logsLoading?loadingView():h('div',{className:'lb'},S.logs===null?t('click_refresh'):S.logs===''?'(empty log file)':S.logs));
 }
 
 // ─── Modal (#14 proper dialogs, #19 accessible with Escape) ─
