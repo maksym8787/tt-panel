@@ -395,10 +395,9 @@ async function doLogout(){await api('/logout',{method:'POST'});S.auth=false;R()}
 
 // ─── Data loaders ───────────────────────────────────────
 async function loadAll(){
-  await Promise.all([_loadDash(),_loadSummary(),_checkPendingReload(),_loadTraffic()]);
-  R(drawDashCharts)
+  await Promise.all([_loadDash(),_loadSummary(),_checkPendingReload()]);
+  R()
 }
-function drawDashCharts(){if(!window.Chart){setTimeout(drawDashCharts,200);return}drawTrafficChart()}
 async function loadDash(){await _loadDash();R()}
 async function _loadDash(){try{var p=await Promise.all([api('/status'),api('/users')]);S.status=p[0];S.users=p[1].users}catch(e){toast(e.message,true)}await _loadActiveIps()}
 async function _loadSummary(){try{S.summary=await api('/monitoring/summary')}catch(e){}}
@@ -409,8 +408,8 @@ async function _loadOnline(){try{S.online=await api('/monitoring/online')}catch(
 async function _loadDbSize(){try{S.dbSize=await api('/monitoring/db-size')}catch(e){}}
 async function _loadActiveIps(){try{var r=await api('/active-ips');S.activeIps=r.active_ips||{}}catch(e){}}
 async function _checkPendingReload(){try{var r=await api('/pending-reload');S.pendingReload=r.pending}catch(e){}}
-async function loadHistory(h){await _loadHistory(h);R(drawAllCharts)}
-async function _loadTraffic(d){try{S.traffic=await api('/monitoring/traffic?days='+(d||7))}catch(e){}}
+async function loadHistory(h){await Promise.all([_loadHistory(h),_loadTraffic(),_loadConnTimeline()]);R(drawMonitorCharts)}
+async function _loadTraffic(d){try{var url=S.tab==='monitor'?'/monitoring/traffic?hours='+S.monPeriod:'/monitoring/traffic?days='+(d||7);S.traffic=await api(url)}catch(e){}}
 async function loadTraffic(d){await _loadTraffic(d);R(drawTrafficChart)}
 async function loadConns(h){await _loadConns(h);R()}
 async function loadOnline(){await _loadOnline();R()}
@@ -482,8 +481,6 @@ function drawAllCharts(){
   var c1=document.getElementById('ch-sessions');
   if(c1){updateChart('sess',c1,{type:'line',data:{labels:labels,datasets:[mkDataset('Sessions',d.map(function(x){return x.sessions}),chartColors.sessions)]},options:chartOpts()})}
 
-  var c2=document.getElementById('ch-bandwidth');
-  if(c2){var bwOpts=chartOpts(function(v){return fmtShort(v)});bwOpts.plugins={...bwOpts.plugins,legend:{display:true,labels:{color:'#8899aa',font:{family:'DM Sans',size:10},boxWidth:8,boxHeight:8,padding:12,usePointStyle:true}},tooltip:{...bwOpts.plugins.tooltip,callbacks:{label:function(ctx){return ctx.dataset.label+': '+fmtTooltip(ctx.raw)}}}};updateChart('bw',c2,{type:'line',data:{labels:labels,datasets:[mkDataset('Download',d.map(function(x){return x.out}),chartColors.download),mkDataset('Upload',d.map(function(x){return x['in']}),chartColors.upload)]},options:bwOpts})}
 
   var c3=document.getElementById('ch-resources');
   if(c3){
@@ -705,10 +702,6 @@ function renderDash(){
         h('button',{className:'btn btn-sm btn-d',onClick:function(e){svcAct('stop',e.currentTarget)}},t('stop')),
         h('button',{className:'btn btn-sm',onClick:renewCert},t('renew_cert')))),
 
-    S.traffic&&S.traffic.hourly&&S.traffic.hourly.length?h('div',{className:'card'},
-      h('div',{className:'card-t'},t('traffic_hourly')),
-      h('div',{className:'chart-wrap'},h('canvas',{id:'ch-traffic'}))):null,
-
     h('div',{className:'card'},
       h('div',{className:'card-t'},t('server_info')),
       h('div',{style:{fontFamily:'var(--m)',fontSize:'11px',color:'var(--tx3)',lineHeight:'1.8',whiteSpace:'pre-wrap'}},
@@ -732,8 +725,8 @@ function renderMonitor(){
       h('div',{className:'chart-wrap'},h('canvas',{id:'ch-sessions'}))),
 
     h('div',{className:'card'},
-      h('div',{className:'card-t'},t('bandwidth')),
-      h('div',{className:'chart-wrap'},h('canvas',{id:'ch-bandwidth'}))),
+      h('div',{className:'card-t'},t('traffic_hourly')),
+      h('div',{className:'chart-wrap'},h('canvas',{id:'ch-traffic'}))),
 
     h('div',{className:'card'},
       h('div',{className:'card-t'},t('cpu_memory')),
@@ -761,11 +754,10 @@ function renderMonitor(){
         h('div',{style:{fontSize:'10px',fontWeight:'600',color:'var(--tx3)',textTransform:'uppercase',letterSpacing:'.05em',marginBottom:'8px'}},t('recently_active')),
         h('div',{style:{display:'flex',flexWrap:'wrap',gap:'6px'}},S.online.recently_active.slice(0,20).map(function(u){var g=u.geo||{};return h('span',{className:'badge b-bl',style:{fontSize:'11px'}},(g.flag?g.flag+' ':'')+u.ip)}))):null),
 
-    h('div',{className:'card'},
-      h('div',{className:'card-t'},
+    expandableCard('conn_log',
+      h('span',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',width:'100%'}},
         h('span',null,t('connection_log')),
-        h('div',{className:'right'},
-          periodSelector(S.connPeriod,[{v:1,l:'1h'},{v:6,l:'6h'},{v:24,l:'24h'},{v:168,l:'7d'}],function(v){loadConns(v)}))),
+        periodSelector(S.connPeriod,[{v:1,l:'1h'},{v:6,l:'6h'},{v:24,l:'24h'},{v:168,l:'7d'}],function(v){loadConns(v)})),
       S.conns&&S.conns.connections&&S.conns.connections.length?h('div',null,
         h('table',{className:'tbl'},
           h('thead',null,h('tr',null,h('th',null,t('time')),h('th',null,t('ip')),h('th',null,t('user_agent')),h('th',null,t('destination')),h('th',null,t('event')))),
@@ -957,7 +949,7 @@ checkAuth();
 // (#12) Auto-refresh pause when tab hidden
 var _refreshDash,_refreshMon;
 function startRefreshTimers(){
-  _refreshDash=setInterval(async function(){if(S.auth&&S.tab==='dashboard'){await Promise.all([_loadDash(),_loadSummary(),_checkPendingReload(),_loadTraffic()]);R(drawDashCharts)}},15000);
+  _refreshDash=setInterval(async function(){if(S.auth&&S.tab==='dashboard'){await Promise.all([_loadDash(),_loadSummary(),_checkPendingReload()]);R()}},15000);
   _refreshMon=setInterval(async function(){if(S.auth&&S.tab==='monitor'){await Promise.all([_loadHistory(),_loadTraffic(),_loadConnTimeline(),_loadOnline(),_loadConns()]);R(function(){drawMonitorCharts();_updateMonitorNonChart()})}},30000);
 }
 function stopRefreshTimers(){if(_refreshDash){clearInterval(_refreshDash);_refreshDash=null}if(_refreshMon){clearInterval(_refreshMon);_refreshMon=null}}

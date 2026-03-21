@@ -307,12 +307,17 @@ async def monitoring_history(request: Request, hours: int = 24):
 
 
 @app.get("/api/monitoring/traffic")
-async def monitoring_traffic(request: Request, days: int = 7):
+async def monitoring_traffic(request: Request, days: int = 0, hours: int = 0):
     await require_auth(request)
-    days = max(1, min(days, 30))
+    if hours > 0:
+        since_sec = max(1, min(hours, 720)) * 3600
+    elif days > 0:
+        since_sec = max(1, min(days, 30)) * 86400
+    else:
+        since_sec = 7 * 86400
 
     def _query():
-        since = int(time.time()) - days * 86400
+        since = int(time.time()) - since_sec
         with get_db() as conn:
             conn.execute("PRAGMA busy_timeout=5000")
             c = conn.cursor()
