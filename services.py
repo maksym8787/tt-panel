@@ -301,12 +301,13 @@ def kill_client_sessions(client_ips):
     port = _get_tt_listen_port()
     for ip in client_ips:
         try:
-            subprocess.run(
-                ["ss", "--kill", "state", "established",
-                 f"dst {ip}", f"sport = :{port}"],
-                capture_output=True, timeout=5
+            cmd = f"ss -K 'sport = :{port} and dst {ip}'"
+            r = subprocess.run(
+                ["bash", "-c", cmd],
+                capture_output=True, text=True, timeout=5
             )
-            logger.info("Killed TT sessions from IP %s (port %d)", ip, port)
+            logger.info("Kill sessions ip=%s port=%d rc=%d out=[%s] err=[%s]",
+                        ip, port, r.returncode, r.stdout.strip(), r.stderr.strip())
         except Exception as e:
             logger.warning("Failed to kill session for %s: %s", ip, e)
 
