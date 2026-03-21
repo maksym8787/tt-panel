@@ -1,3 +1,4 @@
+import os
 import re
 import secrets
 import shutil
@@ -307,23 +308,31 @@ def is_reload_pending():
     return _pending_reload
 
 
+_prev_cpu = None
+_prev_cpu_ts = 0
+
+def _read_cpu_stat():
+    with open("/proc/stat") as f:
+        for line in f:
+            if line.startswith("cpu "):
+                return list(map(int, line.split()[1:]))
+    return None
+
 def get_vps_resources():
+    global _prev_cpu, _prev_cpu_ts
     info = {}
     try:
-        r = subprocess.run(
-            ["grep", "cpu ", "/proc/stat"], capture_output=True, text=True, timeout=2
-        )
-        if r.returncode == 0:
-            vals1 = list(map(int, r.stdout.strip().split()[1:]))
-            time.sleep(0.2)
-            r2 = subprocess.run(
-                ["grep", "cpu ", "/proc/stat"], capture_output=True, text=True, timeout=2
-            )
-            if r2.returncode == 0:
-                vals2 = list(map(int, r2.stdout.strip().split()[1:]))
-                d_idle = vals2[3] - vals1[3]
-                d_total = sum(vals2) - sum(vals1)
-                info["cpu_pct"] = round(100 * (1 - d_idle / d_total), 1) if d_total > 0 else 0
+        cur = _read_cpu_stat()
+        now = time.monotonic()
+        if cur and _prev_cpu and (now - _prev_cpu_ts) > 1:
+            d_idle = cur[3] - _prev_cpu[3]
+            d_total = sum(cur) - sum(_prev_cpu)
+            info["cpu_pct"] = round(100 * (1 - d_idle / d_total), 1) if d_total > 0 else 0
+        else:
+            info["cpu_pct"] = 0
+        if cur:
+            _prev_cpu = cur
+            _prev_cpu_ts = now
     except Exception:
         info["cpu_pct"] = 0
     try:
@@ -343,14 +352,12 @@ def get_vps_resources():
         info["ram_used_mb"] = 0
         info["ram_pct"] = 0
     try:
-        r = subprocess.run(["df", "-B1", "/"], capture_output=True, text=True, timeout=5)
-        if r.returncode == 0:
-            parts = r.stdout.strip().splitlines()[-1].split()
-            total = int(parts[1])
-            used = int(parts[2])
-            info["disk_total_gb"] = round(total / 1073741824, 1)
-            info["disk_used_gb"] = round(used / 1073741824, 1)
-            info["disk_pct"] = round(100 * used / total, 1) if total > 0 else 0
+        st = os.statvfs("/")
+        total = st.f_frsize * st.f_blocks
+        used = total - st.f_frsize * st.f_bfree
+        info["disk_total_gb"] = round(total / 1073741824, 1)
+        info["disk_used_gb"] = round(used / 1073741824, 1)
+        info["disk_pct"] = round(100 * used / total, 1) if total > 0 else 0
     except Exception:
         info["disk_total_gb"] = 0
         info["disk_used_gb"] = 0

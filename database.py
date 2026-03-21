@@ -62,6 +62,8 @@ def init_stats_db():
         )""")
         c.execute("CREATE INDEX IF NOT EXISTS idx_metrics_ts ON metrics_snapshots(ts)")
         c.execute("CREATE INDEX IF NOT EXISTS idx_conn_ts ON connections(ts)")
+        c.execute("CREATE INDEX IF NOT EXISTS idx_conn_ts_event ON connections(ts, event)")
+        c.execute("CREATE INDEX IF NOT EXISTS idx_conn_ts_ip ON connections(ts, client_ip)")
         c.execute("CREATE INDEX IF NOT EXISTS idx_traffic_hour ON traffic_hourly(hour_ts)")
         conn.commit()
 
@@ -74,7 +76,7 @@ def cleanup_old_data():
         c = conn.cursor()
         c.execute("DELETE FROM metrics_snapshots WHERE ts < ?", (cutoff,))
         c.execute("DELETE FROM connections WHERE ts < ?", (cutoff,))
-        c.execute("DELETE FROM traffic_hourly WHERE ts < ?", (cutoff,))
+        c.execute("DELETE FROM traffic_hourly WHERE hour_ts < ?", (cutoff,))
         conn.commit()
     now = time.time()
     if now - _last_vacuum_ts > 86400:

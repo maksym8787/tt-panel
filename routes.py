@@ -258,17 +258,26 @@ async def apply_reload(request: Request):
     return {"ok": True}
 
 
+_status_cache = {"data": None, "ts": 0}
+_STATUS_TTL = 10
+
 @app.get("/api/status")
 async def server_status(request: Request):
     await require_auth(request)
-    status = await asyncio.to_thread(get_service_status)
-    cert = await asyncio.to_thread(get_cert_days_remaining)
-    live = await asyncio.to_thread(fetch_live_metrics)
-    clients = await asyncio.to_thread(parse_credentials)
-    vps = await asyncio.to_thread(get_vps_resources)
-    return {
+    now = time.time()
+    if _status_cache["data"] and (now - _status_cache["ts"]) < _STATUS_TTL:
+        return _status_cache["data"]
+    status, cert, live, clients, vps, ip = await asyncio.gather(
+        asyncio.to_thread(get_service_status),
+        asyncio.to_thread(get_cert_days_remaining),
+        asyncio.to_thread(fetch_live_metrics),
+        asyncio.to_thread(parse_credentials),
+        asyncio.to_thread(get_vps_resources),
+        asyncio.to_thread(get_server_ip),
+    )
+    result = {
         "service": status, "domain": get_domain(), "certificate": cert,
-        "users_count": len(clients), "ip": await asyncio.to_thread(get_server_ip),
+        "users_count": len(clients), "ip": ip,
         "vps": vps,
         "live": {
             "sessions": live.get("client_sessions", 0),
@@ -281,6 +290,9 @@ async def server_status(request: Request):
             "open_fds": live.get("process_open_fds", 0),
         },
     }
+    _status_cache["data"] = result
+    _status_cache["ts"] = now
+    return result
 
 
 @app.get("/api/monitoring/history")
