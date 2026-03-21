@@ -142,7 +142,7 @@ def parse_new_log_entries():
 
     if not new_lines:
         try:
-            since_sec = max(COLLECT_INTERVAL + 10, 120)
+            since_sec = COLLECT_INTERVAL + 5
             r = subprocess.run(
                 ["journalctl", "-u", "trusttunnel", "--no-pager", "-q",
                  "--since", f"{since_sec} seconds ago"],

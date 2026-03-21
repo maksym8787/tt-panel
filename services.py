@@ -39,6 +39,10 @@ def _parse_toml_stdlib(path: Path) -> list:
         return None
 
 
+def _toml_escape(s):
+    return s.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n").replace("\r", "\\r")
+
+
 def _normalize_client(c):
     from datetime import datetime
     return {
@@ -58,8 +62,8 @@ def write_credentials(clients):
         created = c.get("created_at", "")
         if enabled:
             lines.append("[[client]]")
-            lines.append(f'username = "{c["username"]}"')
-            lines.append(f'password = "{c["password"]}"')
+            lines.append(f'username = "{_toml_escape(c["username"])}"')
+            lines.append(f'password = "{_toml_escape(c["password"])}"')
             if created:
                 lines.append(f'created_at = "{created}"')
             lines.append("")

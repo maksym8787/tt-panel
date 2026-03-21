@@ -365,22 +365,19 @@ async def monitoring_connections(request: Request, hours: int = 24, limit: int =
                 GROUP BY client_ip ORDER BY cnt DESC LIMIT 20""", (since,))
             per_client = [{"ip": r[0], "connections": r[1], "last_seen": r[2],
                           "user_agent": (r[3] or "").split(",")[0]} for r in c.fetchall()]
-            c.execute("""SELECT destination FROM connections
-                WHERE ts > ? AND destination IS NOT NULL""", (since,))
-            all_dsts = [r[0] for r in c.fetchall()]
         domain_counts = {}
         for dst, cnt in raw_dst:
             resolved = rdns_lookup_cached(dst) if dst else dst
             domain = resolved.split(":")[0] if resolved else dst
             domain_counts[domain] = domain_counts.get(domain, 0) + cnt
         top_dst = sorted(domain_counts.items(), key=lambda x: -x[1])[:20]
-        top_dst = [{"dst": d, "count": c} for d, c in top_dst]
+        top_dst = [{"dst": d, "count": ct} for d, ct in top_dst]
         port_counts = {}
-        for d in all_dsts:
-            port = d.split(":")[-1] if ":" in d else "?"
-            port_counts[port] = port_counts.get(port, 0) + 1
+        for dst, cnt in raw_dst:
+            port = dst.split(":")[-1] if dst and ":" in dst else "?"
+            port_counts[port] = port_counts.get(port, 0) + cnt
         top_ports = sorted(port_counts.items(), key=lambda x: -x[1])[:10]
-        top_ports = [{"port": p, "count": c} for p, c in top_ports]
+        top_ports = [{"port": p, "count": ct} for p, ct in top_ports]
         return rows, top_dst, unique_ips, per_client, top_ports
 
     rows, top_dst, unique_ips, per_client, top_ports = await asyncio.to_thread(_query)

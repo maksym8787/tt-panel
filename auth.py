@@ -23,9 +23,13 @@ LOGIN_WINDOW = 300
 
 
 def _deep_copy_panel(d):
-    return {"admin_password_hash": d.get("admin_password_hash", ""),
-            "sessions": dict(d.get("sessions", {})),
-            "panel_settings": dict(d.get("panel_settings", {"session_ttl": 86400}))}
+    import copy
+    result = {"admin_password_hash": d.get("admin_password_hash", ""),
+              "sessions": dict(d.get("sessions", {})),
+              "panel_settings": dict(d.get("panel_settings", {"session_ttl": 86400}))}
+    if "disabled_users" in d:
+        result["disabled_users"] = copy.deepcopy(d["disabled_users"])
+    return result
 
 
 def load_panel_db():
