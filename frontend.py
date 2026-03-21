@@ -587,7 +587,7 @@ function _doRender(){
 function renderLogin(){
   var pw;var isS=S.setup;
   var card=h('div',{className:'lw'},h('div',{className:'lc'},
-    h('div',{style:{textAlign:'center',marginBottom:'20px'}},h('img',{src:LOGO_FULL,className:'logo-img',style:{height:'44px',width:'auto',margin:'0 auto 12px'}})),
+    h('div',{style:{textAlign:'center',marginBottom:'20px'}},h('img',{src:LOGO_FULL,className:'logo-img',style:{maxHeight:'56px',maxWidth:'260px',width:'auto',height:'auto',margin:'0 auto 12px'}})),
     h('div',{className:'lt'},isS?t('initial_setup'):''),
     h('div',{className:'ls'},isS?t('create_admin_pw'):t('enter_admin_pw')),
     h('div',{className:'fg'},pw=h('input',{className:'input',type:'password',placeholder:t('password'),style:{textAlign:'center'}})),
@@ -615,7 +615,7 @@ function renderApp(){
   return h('div',{className:'app fade-in'},
     h('div',{className:'hdr'},
       h('div',{className:'logo'},
-        h('img',{src:LOGO_FULL,className:'logo-img',style:{height:'34px'}}),
+        h('img',{src:LOGO_FULL,className:'logo-img',style:{height:'34px',width:'auto'}}),
         h('div',{className:'logo-s',style:{marginLeft:'8px'}},(S.status&&S.status.domain)||'')),
       h('div',{className:'bg'},
         h('div',{className:'lg'},
