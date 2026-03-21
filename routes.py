@@ -5,8 +5,11 @@ import subprocess
 import time
 from datetime import datetime
 
+from pathlib import Path
+
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 import config
 from config import LOG_FILE, PANEL_DIR, STATS_DB, VPN_TOML, RULES_TOML, HOSTS_TOML, logger
@@ -27,6 +30,10 @@ from network import rdns_lookup, geo_lookup, enrich_with_geo
 from frontend import FRONTEND_HTML
 
 app = FastAPI(title="TrustTunnel Admin", docs_url=None, redoc_url=None)
+
+_static_dir = Path(__file__).parent / "static"
+if _static_dir.is_dir():
+    app.mount("/static", StaticFiles(directory=str(_static_dir)), name="static")
 
 
 @app.middleware("http")
