@@ -283,6 +283,20 @@ def _do_deferred_reload():
         logger.error("Service reload error: %s", e)
 
 
+def force_restart():
+    global _pending_reload, _reload_timer
+    with _reload_lock:
+        if _reload_timer is not None:
+            _reload_timer.cancel()
+            _reload_timer = None
+        _pending_reload = False
+    try:
+        subprocess.run(["systemctl", "restart", "trusttunnel"], timeout=10)
+        logger.info("Service restarted (force - user disabled/deleted)")
+    except Exception as e:
+        logger.error("Service restart error: %s", e)
+
+
 def schedule_reload():
     global _pending_reload, _reload_timer
     with _reload_lock:

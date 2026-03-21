@@ -22,7 +22,7 @@ from services import (
     parse_credentials, write_credentials, get_domain, export_client_config,
     get_service_status, get_cert_days_remaining, get_server_ip,
     generate_password, _do_cert_renewal, schedule_reload, apply_reload_now,
-    is_reload_pending, get_vps_resources,
+    is_reload_pending, get_vps_resources, force_restart,
 )
 from collector import fetch_live_metrics
 from database import get_db
@@ -177,7 +177,7 @@ async def delete_user(username: str, request: Request):
     if len(new) == len(clients):
         raise HTTPException(404, "Not found")
     await asyncio.to_thread(write_credentials, new)
-    schedule_reload()
+    await asyncio.to_thread(force_restart)
     return {"ok": True}
 
 
@@ -194,7 +194,10 @@ async def toggle_user(username: str, request: Request):
     if not found:
         raise HTTPException(404, "Not found")
     await asyncio.to_thread(write_credentials, clients)
-    schedule_reload()
+    if c["enabled"]:
+        schedule_reload()
+    else:
+        await asyncio.to_thread(force_restart)
     return {"ok": True, "enabled": c["enabled"]}
 
 
