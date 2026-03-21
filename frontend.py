@@ -232,7 +232,7 @@ textarea.input{resize:vertical;min-height:100px}.input-m{font-family:var(--m);fo
 <body>
 <div id="root"></div>
 <script>
-var LOGO_SVG='\x3csvg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg"\x3e\x3cpath d="M20 3C10.6 3 3 9.4 3 17.2c0 4.8 2.8 9 7.1 11.8L8 33.5c-.2.7.5 1.3 1.1.9l6.4-3.2c1.4.3 2.9.5 4.5.5 9.4 0 17-6.4 17-14.2S29.4 3 20 3z" fill="#5b7a99"/\x3e\x3cpath d="M20 5C11.7 5 5 10.5 5 17.2c0 4.2 2.5 7.9 6.3 10.3l.7.4-1.8 3.8 5-2.5.6.1c1.3.3 2.8.4 4.2.4 8.3 0 15-5.5 15-12.2S28.3 5 20 5z" fill="#4a6d8c"/\x3e\x3ccircle cx="20" cy="17" r="9" fill="#3d5f7a" stroke="#2d4f6a" stroke-width="1"/\x3e\x3cpath d="M15 17.5l3.5 3.5 7-7" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/\x3e\x3c/svg\x3e';
+var LOGO_SVG='\x3csvg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg"\x3e\x3cpath d="M50 8C25.7 8 6 24.5 6 44.8c0 12.5 7.2 23.5 18.4 30.6L18 91.2c-.5 1.8 1.2 3.3 2.8 2.4L37.5 85c3.8.9 7.8 1.4 12.5 1.4 24.3 0 44-16.5 44-36.6S74.3 8 50 8z" fill="#5b7a99"/\x3e\x3cpath d="M50 13C28.5 13 11 27.2 11 44.8c0 10.8 6.5 20.4 16.4 26.6l1.8 1.1-4.7 9.8 13-6.5 1.5.3c3.5.7 7.2 1.1 11 1.1 21.5 0 39-14.2 39-31.6S71.5 13 50 13z" fill="#4a6d8c"/\x3e\x3ccircle cx="50" cy="43" r="22" fill="#3d5f7a" stroke="#2d4f6a" stroke-width="2"/\x3e\x3cpath d="M37 44l9 9 18-18" stroke="#fff" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/\x3e\x3c/svg\x3e';
 var A='/api';
 var T={
 en:{
@@ -515,7 +515,7 @@ function renderLogin(){
   var pw;var isS=S.setup;
   var card=h('div',{className:'lw'},h('div',{className:'lc'},
     h('div',{style:{textAlign:'center',marginBottom:'20px'}},h('div',{className:'logo-i',style:{width:'48px',height:'48px',margin:'0 auto 12px'},innerHTML:LOGO_SVG})),
-    h('div',{className:'lt'},isS?t('initial_setup'):'TrustTunnel'),
+    h('div',{className:'lt'},isS?t('initial_setup'):h('span',null,h('span',{style:{color:'#4a6d8c'}},'trust'),h('span',{style:{color:'#8899aa',marginLeft:'5px'}},'tunnel'))),
     h('div',{className:'ls'},isS?t('create_admin_pw'):t('enter_admin_pw')),
     h('div',{className:'fg'},pw=h('input',{className:'input',type:'password',placeholder:t('password'),style:{textAlign:'center'}})),
     h('button',{className:'btn btn-p',style:{width:'100%',justifyContent:'center',padding:'12px',fontSize:'13px',borderRadius:'10px'},onClick:function(){isS?doSetup(pw.value):doLogin(pw.value)}},isS?t('create_password'):t('sign_in')),
@@ -543,7 +543,7 @@ function renderApp(){
     h('div',{className:'hdr'},
       h('div',{className:'logo'},
         h('div',{className:'logo-i',innerHTML:LOGO_SVG}),
-        h('div',null,h('div',{className:'logo-t'},'TrustTunnel'),h('div',{className:'logo-s'},(S.status&&S.status.domain)||t('loading')))),
+        h('div',null,h('div',{className:'logo-t'},h('span',{style:{color:'#4a6d8c'}},'trust'),h('span',{style:{color:'#8899aa',marginLeft:'4px'}},'tunnel')),h('div',{className:'logo-s'},(S.status&&S.status.domain)||t('loading')))),
       h('div',{className:'bg'},
         h('div',{className:'lg'},
           h('button',{className:S.lang==='en'?'on':'',onClick:function(){setLang('en')}},'EN'),
