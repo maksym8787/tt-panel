@@ -277,57 +277,10 @@ def _do_deferred_reload():
     with _reload_lock:
         _pending_reload = False
     try:
-        subprocess.run(["systemctl", "reload-or-restart", "trusttunnel"], timeout=10)
-        logger.info("Service reloaded (debounced)")
+        subprocess.run(["systemctl", "restart", "trusttunnel"], timeout=10)
+        logger.info("Service restarted (debounced)")
     except Exception as e:
-        logger.error("Service reload error: %s", e)
-
-
-def _get_tt_listen_port():
-    try:
-        if VPN_TOML.exists():
-            for line in VPN_TOML.read_text().splitlines():
-                if "listen_port" in line and "=" in line:
-                    val = line.split("=", 1)[1].strip().strip('"').strip("'")
-                    return int(val)
-    except Exception:
-        pass
-    return 443
-
-
-def kill_client_sessions(client_ips):
-    if not client_ips:
-        return
-    port = _get_tt_listen_port()
-    for ip in client_ips:
-        try:
-            cmd = f"ss -K 'sport = :{port} and dst {ip}'"
-            r = subprocess.run(
-                ["bash", "-c", cmd],
-                capture_output=True, text=True, timeout=5
-            )
-            logger.info("Kill sessions ip=%s port=%d rc=%d out=[%s] err=[%s]",
-                        ip, port, r.returncode, r.stdout.strip(), r.stderr.strip())
-        except Exception as e:
-            logger.warning("Failed to kill session for %s: %s", ip, e)
-
-
-def get_active_ips_for_user(username):
-    from database import get_db
-    since = int(time.time()) - 3600
-    ips = set()
-    try:
-        with get_db() as conn:
-            c = conn.cursor()
-            c.execute("""SELECT DISTINCT client_ip FROM connections
-                WHERE ts > ? AND client_ip IS NOT NULL AND event='connect'""",
-                (since,))
-            for row in c.fetchall():
-                if row[0]:
-                    ips.add(row[0])
-    except Exception:
-        pass
-    return list(ips)
+        logger.error("Service restart error: %s", e)
 
 
 def schedule_reload():
@@ -349,10 +302,10 @@ def apply_reload_now():
             _reload_timer = None
         _pending_reload = False
     try:
-        subprocess.run(["systemctl", "reload-or-restart", "trusttunnel"], timeout=10)
-        logger.info("Service reloaded (immediate)")
+        subprocess.run(["systemctl", "restart", "trusttunnel"], timeout=10)
+        logger.info("Service restarted (immediate)")
     except Exception as e:
-        logger.error("Service reload error: %s", e)
+        logger.error("Service restart error: %s", e)
 
 
 def is_reload_pending():
