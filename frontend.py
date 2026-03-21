@@ -365,8 +365,8 @@ function toast(m,e){S.toast={m:m,e:!!e};R();setTimeout(function(){S.toast=null;R
 function fmt(b){if(b==null)return '0 B';if(b>=1099511627776)return(b/1099511627776).toFixed(2)+' TB';if(b>=1073741824)return(b/1073741824).toFixed(2)+' GB';if(b>=1048576)return(b/1048576).toFixed(1)+' MB';if(b>=1024)return(b/1024).toFixed(0)+' KB';return b+' B'}
 function fmtShort(b){if(b==null)return '0';if(b>=1099511627776)return(b/1099511627776).toFixed(1)+' TB';if(b>=1073741824)return(b/1073741824).toFixed(1)+' GB';if(b>=1048576)return(b/1048576).toFixed(0)+' MB';if(b>=1024)return(b/1024).toFixed(0)+' KB';return b+' B'}
 function fmtTooltip(b){if(b==null)return '0 B';if(b>=1099511627776)return(b/1099511627776).toFixed(2)+' TB';if(b>=1073741824)return(b/1073741824).toFixed(2)+' GB';if(b>=1048576)return(b/1048576).toFixed(1)+' MB';if(b>=1024)return(b/1024).toFixed(0)+' KB';return b+' B'}
-function ts2t(ts){var d=new Date(ts*1000);var h=String(d.getHours()).padStart(2,'0');var m=String(d.getMinutes()).padStart(2,'0');if(d.getHours()===0&&d.getMinutes()===0)return d.getDate()+'.'+(d.getMonth()+1)+' '+h+':'+m;return h+':'+m}
-function ts2h(ts){var d=new Date(ts*1000);return String(d.getHours()).padStart(2,'0')+':00'}
+function ts2t(ts){var d=new Date(ts*1000);var hh=String(d.getHours()).padStart(2,'0')+':00';if(d.getHours()===0)return d.getDate()+'.'+(d.getMonth()+1)+' '+hh;return hh}
+function ts2h(ts){return ts2t(ts)}
 function ts2dt(ts){return new Date(ts*1000).toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}
 function ago(ts){var d=Math.floor(Date.now()/1000-ts);if(d<60)return d+' '+t('s_ago');if(d<3600)return Math.floor(d/60)+' '+t('m_ago');if(d<86400)return Math.floor(d/3600)+' '+t('h_ago');return Math.floor(d/86400)+' '+t('d_ago')}
 function fmtUptime(sec){if(!sec)return '\u2014';var d=Math.floor(sec/86400),h=Math.floor((sec%86400)/3600),m=Math.floor((sec%3600)/60);if(d>0)return d+'d '+h+'h '+m+'m';if(h>0)return h+'h '+m+'m';return m+'m'}
@@ -487,7 +487,7 @@ function drawTrafficChart(){
   if(!S.traffic||!S.traffic.hourly.length)return;
   var d=S.traffic.hourly;var c=document.getElementById('ch-traffic');
   if(c){
-    var labels=d.map(function(x){var dt=new Date(x.ts*1000);var h=String(dt.getHours()).padStart(2,'0')+':00';if(dt.getHours()===0)return dt.getDate()+'.'+(dt.getMonth()+1)+' '+h;return h});
+    var labels=d.map(function(x){return ts2t(x.ts)});
     updateChart('traffic',c,{type:'bar',data:{labels:labels,datasets:[{label:'Download',data:d.map(function(x){return x.out}),backgroundColor:'rgba(34,197,94,0.5)',borderRadius:3},{label:'Upload',data:d.map(function(x){return x['in']}),backgroundColor:'rgba(245,158,11,0.5)',borderRadius:3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,labels:{color:'#8899aa',font:{family:'DM Sans',size:10},boxWidth:8,boxHeight:8,padding:12,usePointStyle:true}},tooltip:{backgroundColor:'#131a24',borderColor:'#1e2a3a',borderWidth:1,titleColor:'#e2e8f0',bodyColor:'#8899aa',padding:10,cornerRadius:8,callbacks:{label:function(ctx){return ctx.dataset.label+': '+fmtTooltip(ctx.raw)}}}},scales:{x:{display:true,ticks:{color:'#556677',font:{family:'JetBrains Mono',size:8},maxTicksLimit:24,maxRotation:0},stacked:true,grid:{display:false},border:{display:false}},y:{display:true,ticks:{color:'#556677',font:{family:'JetBrains Mono',size:9},callback:function(v){return fmtShort(v)},maxTicksLimit:5},grid:{color:'rgba(30,42,58,0.5)'},stacked:true,border:{display:false}}}}})
   }
 }
