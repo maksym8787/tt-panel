@@ -383,7 +383,8 @@ async function doSetup(pw){try{await api('/setup',{method:'POST',body:JSON.strin
 async function doLogout(){await api('/logout',{method:'POST'});S.auth=false;R()}
 
 // ─── Data loaders ───────────────────────────────────────
-async function loadAll(){await Promise.all([_loadDash(),_loadSummary(),_checkPendingReload(),_loadTraffic()]);R();await _waitChart();setTimeout(drawTrafficChart,50)}
+async function loadAll(){await Promise.all([_loadDash(),_loadSummary(),_checkPendingReload(),_loadTraffic()]);R();drawDashCharts()}
+function drawDashCharts(){if(!window.Chart){setTimeout(drawDashCharts,200);return}setTimeout(drawTrafficChart,60)}
 async function loadDash(){await _loadDash();R()}
 async function _loadDash(){try{var p=await Promise.all([api('/status'),api('/users')]);S.status=p[0];S.users=p[1].users}catch(e){toast(e.message,true)}await _loadActiveIps()}
 async function _loadSummary(){try{S.summary=await api('/monitoring/summary')}catch(e){}}
@@ -402,7 +403,8 @@ async function loadOnline(){await _loadOnline();R()}
 async function loadLogs(){S.logs='Loading...';R();try{var r=await api('/logs?lines=200');S.logs=r.logs||'(empty log file)'}catch(e){S.logs='Error: '+e.message;toast(e.message,true)}R()}
 async function loadSettings(){try{S.settings=await api('/settings')}catch(e){toast(e.message,true)}R()}
 function _waitChart(){return window.Chart?Promise.resolve():new Promise(function(ok){var tries=0;var iv=setInterval(function(){tries++;if(window.Chart){clearInterval(iv);ok()}else if(tries>50){clearInterval(iv);ok()}},100)})}
-async function loadMonitorAll(){S.monLoading=true;R();await Promise.all([_loadHistory(),_loadTraffic(),_loadConnTimeline(),_loadOnline(),_loadConns(),_loadDbSize()]);S.monLoading=false;R();await _waitChart();setTimeout(function(){drawAllCharts();drawTrafficChart();drawConnChart()},50)}
+async function loadMonitorAll(){S.monLoading=true;R();await Promise.all([_loadHistory(),_loadTraffic(),_loadConnTimeline(),_loadOnline(),_loadConns(),_loadDbSize()]);S.monLoading=false;R();drawMonitorCharts()}
+function drawMonitorCharts(){if(!window.Chart){setTimeout(drawMonitorCharts,200);return}setTimeout(function(){drawAllCharts();drawTrafficChart();drawConnChart()},60)}
 
 // ─── User actions (#14 modal dialogs, #15 loading) ──────
 async function addUser(u,p){try{var r=await api('/users',{method:'POST',body:JSON.stringify({username:u,password:p})});toast(t('user_created')+' "'+u+'" ('+t('pass_label')+': '+r.password+')');S.modal=null;loadDash()}catch(e){toast(e.message,true)}}
