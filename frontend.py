@@ -260,7 +260,7 @@ en:{
   disk:'Disk',uptime:'Uptime',vps_resources:'VPS Resources',traffic_hourly:'Hourly traffic',
   sockets:'Sockets (TCP/UDP)',controls:'Controls',refresh:'Refresh',
   restart:'Restart',reload_tls:'Reload TLS',stop:'Stop',renew_cert:'Renew cert',
-  server_info:'Server info',domain:'Domain',server_uptime:'Server uptime',service_uptime:'Service uptime',
+  server_info:'Server info',domain:'Domain',server_uptime:'Server uptime',service_uptime:'Last restart',
   monitoring:'Monitoring',active_sessions:'Active sessions',now:'now',
   bandwidth:'Traffic (Download / Upload)',cpu_memory:'CPU & Memory',
   online_users:'Online users',sessions:'sessions',
@@ -320,7 +320,7 @@ ru:{
   disk:'\u0414\u0438\u0441\u043a',uptime:'\u0410\u043f\u0442\u0430\u0439\u043c',vps_resources:'\u0420\u0435\u0441\u0443\u0440\u0441\u044b VPS',traffic_hourly:'\u0422\u0440\u0430\u0444\u0438\u043a \u043f\u043e \u0447\u0430\u0441\u0430\u043c',
   sockets:'\u0421\u043e\u043a\u0435\u0442\u044b (TCP/UDP)',controls:'\u0423\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u0438\u0435',refresh:'\u041e\u0431\u043d\u043e\u0432\u0438\u0442\u044c',
   restart:'\u041f\u0435\u0440\u0435\u0437\u0430\u043f\u0443\u0441\u043a',reload_tls:'\u041f\u0435\u0440\u0435\u0437\u0430\u0433\u0440. TLS',stop:'\u0421\u0442\u043e\u043f',renew_cert:'\u041e\u0431\u043d\u043e\u0432\u0438\u0442\u044c \u0441\u0435\u0440\u0442.',
-  server_info:'\u0418\u043d\u0444\u043e\u0440\u043c\u0430\u0446\u0438\u044f \u043e \u0441\u0435\u0440\u0432\u0435\u0440\u0435',domain:'\u0414\u043e\u043c\u0435\u043d',server_uptime:'\u0410\u043f\u0442\u0430\u0439\u043c \u0441\u0435\u0440\u0432\u0435\u0440\u0430',service_uptime:'\u0410\u043f\u0442\u0430\u0439\u043c \u0441\u0435\u0440\u0432\u0438\u0441\u0430',
+  server_info:'\u0418\u043d\u0444\u043e\u0440\u043c\u0430\u0446\u0438\u044f \u043e \u0441\u0435\u0440\u0432\u0435\u0440\u0435',domain:'\u0414\u043e\u043c\u0435\u043d',server_uptime:'\u0410\u043f\u0442\u0430\u0439\u043c \u0441\u0435\u0440\u0432\u0435\u0440\u0430',service_uptime:'\u041f\u043e\u0441\u043b. \u0440\u0435\u0441\u0442\u0430\u0440\u0442',
   monitoring:'\u041c\u043e\u043d\u0438\u0442\u043e\u0440\u0438\u043d\u0433',active_sessions:'\u0410\u043a\u0442\u0438\u0432\u043d\u044b\u0435 \u0441\u0435\u0441\u0441\u0438\u0438',now:'\u0441\u0435\u0439\u0447\u0430\u0441',
   bandwidth:'\u0422\u0440\u0430\u0444\u0438\u043a (\u0417\u0430\u0433\u0440\u0443\u0437\u043a\u0430 / \u041e\u0442\u0434\u0430\u0447\u0430)',cpu_memory:'CPU \u0438 \u041f\u0430\u043c\u044f\u0442\u044c',
   online_users:'\u041e\u043d\u043b\u0430\u0439\u043d \u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u0438',sessions:'\u0441\u0435\u0441\u0441\u0438\u0439',
@@ -665,6 +665,10 @@ function renderDash(){
         h('div',{className:'stat-v ac'},String(l.sessions||0)),
         h('div',{className:'stat-sub'},String(s.users_count||0)+' '+t('users_configured'))),
       h('div',{className:'stat'},
+        h('div',{className:'stat-l'},t('sockets')),
+        h('div',{className:'stat-v'},(l.tcp_sockets||0)+' / '+(l.udp_sockets||0)),
+        h('div',{className:'stat-sub'},'FDs: '+(l.open_fds||0))),
+      h('div',{className:'stat'},
         h('div',{className:'stat-l'},t('mem_cpu')),
         h('div',{className:'stat-v'},(l.memory_mb||0)+' MB'),
         h('div',{className:'stat-sub'},'CPU: '+(l.cpu_seconds||0)+'s total')),
@@ -698,11 +702,6 @@ function renderDash(){
           h('div',null,h('div',{className:'stat-l'},t('connections')),h('div',{style:{fontSize:'14px',fontWeight:'600',fontFamily:'var(--m)'}},String(sm.week?sm.week.connections:0)))))
     ):null,
 
-    h('div',{className:'grid grid3 section-gap'},
-      h('div',{className:'stat'},h('div',{className:'stat-l'},t('dl_restart')),h('div',{className:'stat-v',style:{color:'var(--gn)'}},fmt(l.outbound_bytes||0))),
-      h('div',{className:'stat'},h('div',{className:'stat-l'},t('ul_restart')),h('div',{className:'stat-v',style:{color:'var(--or)'}},fmt(l.inbound_bytes||0))),
-      h('div',{className:'stat'},h('div',{className:'stat-l'},t('sockets')),h('div',{className:'stat-v'},(l.tcp_sockets||0)+'/'+(l.udp_sockets||0)),h('div',{className:'stat-sub'},'FDs: '+(l.open_fds||0)))),
-
     h('div',{className:'card'},
       h('div',{className:'card-t'},t('controls')),
       h('div',{className:'bg'},
@@ -714,7 +713,7 @@ function renderDash(){
     h('div',{className:'card'},
       h('div',{className:'card-t'},t('server_info')),
       h('div',{style:{fontFamily:'var(--m)',fontSize:'11px',color:'var(--tx3)',lineHeight:'1.8',whiteSpace:'pre-wrap'}},
-        t('domain')+':          '+s.domain+'\nIP:              '+s.ip+'\nPID:             '+(s.service&&s.service.pid?s.service.pid:'\u2014')+'\n'+t('server_uptime')+':  '+fmtUptime(s.vps&&s.vps.uptime_seconds)+'\n'+t('service_uptime')+': '+fmtUptime(s.service&&s.service.uptime_seconds)))
+        t('domain')+':          '+s.domain+'\nIP:              '+s.ip+'\nPID:             '+(s.service&&s.service.pid?s.service.pid:'\u2014')+'\n'+t('server_uptime')+':  '+fmtUptime(s.vps&&s.vps.uptime_seconds)+'\n'+t('service_uptime')+': '+(s.service&&s.service.uptime_seconds?new Date(Date.now()-s.service.uptime_seconds*1000).toLocaleString():'\u2014')))
   );
 }
 
