@@ -4,13 +4,13 @@ import time
 import traceback
 import urllib.request
 
-from tt_panel.config import (
+from config import (
     METRICS_URL, COLLECT_INTERVAL, LOG_FILE,
     _shutdown_event, logger,
 )
-from tt_panel.database import get_db, cleanup_old_data
-from tt_panel.network import rdns_lookup
-from tt_panel.auth import cleanup_stale_rate_limits
+from database import get_db, cleanup_old_data
+from network import rdns_lookup
+from auth import cleanup_stale_rate_limits
 
 _prev_metrics = None
 
@@ -161,7 +161,7 @@ def parse_new_log_entries():
 
 def collector_loop():
     global _last_log_pos
-    from tt_panel.services import auto_renew_cert_if_needed
+    from services import auto_renew_cert_if_needed
 
     _last_log_pos = _load_last_log_pos()
     while not _shutdown_event.is_set():

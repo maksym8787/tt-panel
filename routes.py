@@ -8,23 +8,23 @@ from datetime import datetime
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 
-import tt_panel.config as config
-from tt_panel.config import LOG_FILE, PANEL_DIR, STATS_DB, VPN_TOML, RULES_TOML, HOSTS_TOML, logger
-from tt_panel.auth import (
+import config
+from config import LOG_FILE, PANEL_DIR, STATS_DB, VPN_TOML, RULES_TOML, HOSTS_TOML, logger
+from auth import (
     load_panel_db, save_panel_db, hash_password, verify_password,
     check_session, require_auth, check_rate_limit, _hash_token,
     _login_lock, _login_attempts,
 )
-from tt_panel.services import (
+from services import (
     parse_credentials, write_credentials, get_domain, export_client_config,
     get_service_status, get_cert_days_remaining, get_server_ip,
     generate_password, _do_cert_renewal, schedule_reload, apply_reload_now,
     is_reload_pending, get_vps_resources,
 )
-from tt_panel.collector import fetch_live_metrics
-from tt_panel.database import get_db
-from tt_panel.network import rdns_lookup, geo_lookup, enrich_with_geo
-from tt_panel.frontend import FRONTEND_HTML
+from collector import fetch_live_metrics
+from database import get_db
+from network import rdns_lookup, geo_lookup, enrich_with_geo
+from frontend import FRONTEND_HTML
 
 app = FastAPI(title="TrustTunnel Admin", docs_url=None, redoc_url=None)
 

@@ -5,7 +5,7 @@ import time
 import urllib.parse
 import urllib.request
 
-from tt_panel.config import logger
+from config import logger
 
 _rdns_cache = {}
 RDNS_TTL = 3600

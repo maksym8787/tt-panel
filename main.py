@@ -2,11 +2,11 @@ import threading
 
 import uvicorn
 
-from tt_panel.config import PANEL_PORT, CERTS_DIR, logger, _shutdown_event
-import tt_panel.config as config
-from tt_panel.database import init_stats_db
-from tt_panel.collector import collector_loop
-from tt_panel.routes import app
+from config import PANEL_PORT, CERTS_DIR, logger, _shutdown_event
+import config
+from database import init_stats_db
+from collector import collector_loop
+from routes import app
 
 
 def main():

@@ -8,11 +8,11 @@ import threading
 import time
 from pathlib import Path
 
-from tt_panel.config import (
+from config import (
     TT_DIR, VPN_TOML, HOSTS_TOML, CREDS_TOML, CERTS_DIR,
     CERT_AUTO_RENEW_DAYS, logger,
 )
-import tt_panel.config as config
+import config
 
 _pending_reload = False
 _reload_timer = None

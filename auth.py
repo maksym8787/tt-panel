@@ -8,7 +8,7 @@ import time
 
 from fastapi import HTTPException
 
-from tt_panel.config import PANEL_DIR, PANEL_DB, logger
+from config import PANEL_DIR, PANEL_DB, logger
 
 _panel_lock = threading.Lock()
 _panel_cache = None

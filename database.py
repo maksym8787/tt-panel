@@ -2,7 +2,7 @@ import contextlib
 import sqlite3
 import time
 
-from tt_panel.config import STATS_DB, PANEL_DIR, MAX_HISTORY_DAYS, logger
+from config import STATS_DB, PANEL_DIR, MAX_HISTORY_DAYS, logger
 
 _last_vacuum_ts = 0
 
