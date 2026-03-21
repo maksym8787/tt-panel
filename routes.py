@@ -22,7 +22,7 @@ from services import (
     parse_credentials, write_credentials, get_domain, export_client_config,
     get_service_status, get_cert_days_remaining, get_server_ip,
     generate_password, _do_cert_renewal, schedule_reload, apply_reload_now,
-    is_reload_pending, get_vps_resources, force_restart,
+    is_reload_pending, get_vps_resources, kill_client_sessions, get_active_ips_for_user,
 )
 from collector import fetch_live_metrics
 from database import get_db
@@ -172,18 +172,22 @@ async def update_user(username: str, request: Request):
 @app.delete("/api/users/{username}")
 async def delete_user(username: str, request: Request):
     await require_auth(request)
+    client_ips = await asyncio.to_thread(get_active_ips_for_user, username)
     clients = await asyncio.to_thread(parse_credentials)
     new = [c for c in clients if c["username"] != username]
     if len(new) == len(clients):
         raise HTTPException(404, "Not found")
     await asyncio.to_thread(write_credentials, new)
-    await asyncio.to_thread(force_restart)
+    schedule_reload()
+    if client_ips:
+        await asyncio.to_thread(kill_client_sessions, client_ips)
     return {"ok": True}
 
 
 @app.put("/api/users/{username}/toggle")
 async def toggle_user(username: str, request: Request):
     await require_auth(request)
+    client_ips = await asyncio.to_thread(get_active_ips_for_user, username)
     clients = await asyncio.to_thread(parse_credentials)
     found = False
     for c in clients:
@@ -194,10 +198,9 @@ async def toggle_user(username: str, request: Request):
     if not found:
         raise HTTPException(404, "Not found")
     await asyncio.to_thread(write_credentials, clients)
-    if c["enabled"]:
-        schedule_reload()
-    else:
-        await asyncio.to_thread(force_restart)
+    schedule_reload()
+    if not c["enabled"] and client_ips:
+        await asyncio.to_thread(kill_client_sessions, client_ips)
     return {"ok": True, "enabled": c["enabled"]}
 
 

@@ -283,18 +283,37 @@ def _do_deferred_reload():
         logger.error("Service reload error: %s", e)
 
 
-def force_restart():
-    global _pending_reload, _reload_timer
-    with _reload_lock:
-        if _reload_timer is not None:
-            _reload_timer.cancel()
-            _reload_timer = None
-        _pending_reload = False
+def kill_client_sessions(client_ips):
+    if not client_ips:
+        return
+    for ip in client_ips:
+        try:
+            subprocess.run(
+                ["ss", "--kill", "state", "established",
+                 f"src {ip}"],
+                capture_output=True, timeout=5
+            )
+            logger.info("Killed sessions from IP %s", ip)
+        except Exception as e:
+            logger.warning("Failed to kill session for %s: %s", ip, e)
+
+
+def get_active_ips_for_user(username):
+    from database import get_db
+    since = int(time.time()) - 3600
+    ips = set()
     try:
-        subprocess.run(["systemctl", "restart", "trusttunnel"], timeout=10)
-        logger.info("Service restarted (force - user disabled/deleted)")
-    except Exception as e:
-        logger.error("Service restart error: %s", e)
+        with get_db() as conn:
+            c = conn.cursor()
+            c.execute("""SELECT DISTINCT client_ip FROM connections
+                WHERE ts > ? AND client_ip IS NOT NULL AND event='connect'""",
+                (since,))
+            for row in c.fetchall():
+                if row[0]:
+                    ips.add(row[0])
+    except Exception:
+        pass
+    return list(ips)
 
 
 def schedule_reload():
