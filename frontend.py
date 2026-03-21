@@ -8,8 +8,8 @@ FRONTEND_HTML = r"""<!DOCTYPE html>
 <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" crossorigin="anonymous">
 <script>window.QRCode=window.QRCode||null;window.Chart=window.Chart||null;</script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" crossorigin="anonymous" integrity="sha384-3zSEDfvllQohrq0PHL1fOXJuC/jSOO34H46t6UQfobFOmxE5BpjjaIJY5F2/bMnU" async></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" crossorigin="anonymous" integrity="sha384-bs/nf9FbdNouRbMiFcrcZfLXYPKiPaGVGplVbv7dLGECccEXDW+S3zjqSKR5ZEaD" async></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" crossorigin="anonymous" integrity="sha384-3zSEDfvllQohrq0PHL1fOXJuC/jSOO34H46t6UQfobFOmxE5BpjjaIJY5F2/bMnU" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" crossorigin="anonymous" integrity="sha384-bs/nf9FbdNouRbMiFcrcZfLXYPKiPaGVGplVbv7dLGECccEXDW+S3zjqSKR5ZEaD" defer></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{
@@ -227,6 +227,9 @@ textarea.input{resize:vertical;min-height:100px}.input-m{font-family:var(--m);fo
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 .pulse{animation:pulse 2s ease-in-out infinite}
 
+@keyframes spin{to{transform:rotate(360deg)}}
+.spinner{width:16px;height:16px;border:2px solid var(--bd);border-top-color:var(--ac);border-radius:50%;animation:spin .6s linear infinite}
+
 /* (#17) Apply changes banner */
 .apply-bar{background:var(--orbg);border:1px solid rgba(245,158,11,.25);border-radius:var(--r2);padding:10px 16px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;font-size:12px;color:var(--or)}
 </style>
@@ -352,7 +355,7 @@ function setTheme(th){S.theme=th;localStorage.setItem('tt_theme',th);applyTheme(
 function applyTheme(){document.documentElement.setAttribute('data-theme',S.theme)}
 var S={auth:false,setup:false,loading:true,tab:'dashboard',status:null,users:[],logs:null,settings:{},
   history:null,traffic:null,conns:null,online:null,summary:null,toast:null,modal:null,dbSize:null,
-  connTimeline:null,activeIps:{},monPeriod:24,connPeriod:24,pendingReload:false,userFilter:'',
+  connTimeline:null,activeIps:{},monPeriod:24,connPeriod:24,pendingReload:false,userFilter:'',monLoading:false,
   lang:localStorage.getItem('tt_lang')||'en',theme:localStorage.getItem('tt_theme')||'system'};
 
 // ─── API ────────────────────────────────────────────────
@@ -361,7 +364,7 @@ function toast(m,e){S.toast={m:m,e:!!e};R();setTimeout(function(){S.toast=null;R
 function fmt(b){if(b==null)return '0 B';if(b>=1099511627776)return(b/1099511627776).toFixed(2)+' TB';if(b>=1073741824)return(b/1073741824).toFixed(2)+' GB';if(b>=1048576)return(b/1048576).toFixed(1)+' MB';if(b>=1024)return(b/1024).toFixed(0)+' KB';return b+' B'}
 function fmtShort(b){if(b==null)return '0';if(b>=1099511627776)return(b/1099511627776).toFixed(1)+' TB';if(b>=1073741824)return(b/1073741824).toFixed(1)+' GB';if(b>=1048576)return(b/1048576).toFixed(0)+' MB';if(b>=1024)return(b/1024).toFixed(0)+' KB';return b+' B'}
 function fmtTooltip(b){if(b==null)return '0 B';if(b>=1099511627776)return(b/1099511627776).toFixed(2)+' TB';if(b>=1073741824)return(b/1073741824).toFixed(2)+' GB';if(b>=1048576)return(b/1048576).toFixed(1)+' MB';if(b>=1024)return(b/1024).toFixed(0)+' KB';return b+' B'}
-function ts2t(ts){return new Date(ts*1000).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}
+function ts2t(ts){var d=new Date(ts*1000);var h=String(d.getHours()).padStart(2,'0');var m=String(d.getMinutes()).padStart(2,'0');if(d.getHours()===0&&d.getMinutes()===0)return d.getDate()+'.'+(d.getMonth()+1)+' '+h+':'+m;return h+':'+m}
 function ts2h(ts){var d=new Date(ts*1000);return String(d.getHours()).padStart(2,'0')+':00'}
 function ts2dt(ts){return new Date(ts*1000).toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}
 function ago(ts){var d=Math.floor(Date.now()/1000-ts);if(d<60)return d+' '+t('s_ago');if(d<3600)return Math.floor(d/60)+' '+t('m_ago');if(d<86400)return Math.floor(d/3600)+' '+t('h_ago');return Math.floor(d/86400)+' '+t('d_ago')}
@@ -398,8 +401,8 @@ async function loadConns(h){await _loadConns(h);R()}
 async function loadOnline(){await _loadOnline();R()}
 async function loadLogs(){S.logs='Loading...';R();try{var r=await api('/logs?lines=200');S.logs=r.logs||'(empty log file)'}catch(e){S.logs='Error: '+e.message;toast(e.message,true)}R()}
 async function loadSettings(){try{S.settings=await api('/settings')}catch(e){toast(e.message,true)}R()}
-function _waitChart(){return window.Chart?Promise.resolve():new Promise(function(ok){var iv=setInterval(function(){if(window.Chart){clearInterval(iv);ok()}},100)})}
-async function loadMonitorAll(){await Promise.all([_loadHistory(),_loadTraffic(),_loadConnTimeline(),_loadOnline(),_loadConns(),_loadDbSize()]);R();await _waitChart();setTimeout(function(){drawAllCharts();drawTrafficChart();drawConnChart()},50)}
+function _waitChart(){return window.Chart?Promise.resolve():new Promise(function(ok){var tries=0;var iv=setInterval(function(){tries++;if(window.Chart){clearInterval(iv);ok()}else if(tries>50){clearInterval(iv);ok()}},100)})}
+async function loadMonitorAll(){S.monLoading=true;R();await Promise.all([_loadHistory(),_loadTraffic(),_loadConnTimeline(),_loadOnline(),_loadConns(),_loadDbSize()]);S.monLoading=false;R();await _waitChart();setTimeout(function(){drawAllCharts();drawTrafficChart();drawConnChart()},50)}
 
 // ─── User actions (#14 modal dialogs, #15 loading) ──────
 async function addUser(u,p){try{var r=await api('/users',{method:'POST',body:JSON.stringify({username:u,password:p})});toast(t('user_created')+' "'+u+'" ('+t('pass_label')+': '+r.password+')');S.modal=null;loadDash()}catch(e){toast(e.message,true)}}
@@ -662,6 +665,10 @@ function renderDash(){
 // ─── Monitor ────────────────────────────────────────────
 function renderMonitor(){
   var periods=[{v:1,l:'1h'},{v:6,l:'6h'},{v:24,l:'24h'},{v:168,l:'7d'}];
+
+  if(S.monLoading&&!S.history){return h('div',{className:'fade-in'},
+    h('div',{style:{display:'flex',justifyContent:'center',alignItems:'center',padding:'80px 0',color:'var(--tx3)',fontSize:'13px',gap:'8px'}},
+      h('div',{className:'spinner'}),'Loading...'))}
 
   return h('div',{className:'fade-in'},
     h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'14px'}},
