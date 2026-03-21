@@ -26,7 +26,7 @@ from services import (
 )
 from collector import fetch_live_metrics
 from database import get_db
-from network import rdns_lookup, geo_lookup, enrich_with_geo
+from network import rdns_lookup, rdns_lookup_cached, geo_lookup, enrich_with_geo
 from frontend import FRONTEND_HTML
 
 app = FastAPI(title="TrustTunnel Admin", docs_url=None, redoc_url=None)
@@ -314,7 +314,7 @@ async def monitoring_connections(request: Request, hours: int = 24, limit: int =
             c = conn.cursor()
             c.execute("""SELECT ts, client_ip, user_agent, destination, event
                 FROM connections WHERE ts > ? ORDER BY ts DESC LIMIT ?""", (since, limit))
-            rows = [{"ts": r[0], "ip": r[1], "ua": r[2], "dst": rdns_lookup(r[3]) if r[3] else r[3], "event": r[4]} for r in c.fetchall()]
+            rows = [{"ts": r[0], "ip": r[1], "ua": r[2], "dst": rdns_lookup_cached(r[3]) if r[3] else r[3], "event": r[4]} for r in c.fetchall()]
             c.execute("""SELECT destination, COUNT(*) as cnt FROM connections
                 WHERE ts > ? AND destination IS NOT NULL GROUP BY destination ORDER BY cnt DESC LIMIT 50""", (since,))
             raw_dst = c.fetchall()
@@ -331,7 +331,7 @@ async def monitoring_connections(request: Request, hours: int = 24, limit: int =
             all_dsts = [r[0] for r in c.fetchall()]
         domain_counts = {}
         for dst, cnt in raw_dst:
-            resolved = rdns_lookup(dst) if dst else dst
+            resolved = rdns_lookup_cached(dst) if dst else dst
             domain = resolved.split(":")[0] if resolved else dst
             domain_counts[domain] = domain_counts.get(domain, 0) + cnt
         top_dst = sorted(domain_counts.items(), key=lambda x: -x[1])[:20]
