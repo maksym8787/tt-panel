@@ -6,8 +6,8 @@ var A='/api';
 
 CORE_JS = r'''
 function t(k){return (T[S.lang]||T.en)[k]||T.en[k]||k}
-function setLang(l){S.lang=l;localStorage.setItem('tt_lang',l);R()}
-function setTheme(th){S.theme=th;localStorage.setItem('tt_theme',th);applyTheme()}
+function setLang(l){S.lang=l;localStorage.setItem('tt_lang',l);if(!S.auth){_softUpdateLogin()}else{R()}}
+function setTheme(th){S.theme=th;localStorage.setItem('tt_theme',th);applyTheme();if(!S.auth){_softUpdateLogin()}}
 function applyTheme(){document.documentElement.setAttribute('data-theme',S.theme)}
 var S={auth:false,setup:false,loading:true,tab:'dashboard',status:null,users:[],logs:null,settings:{},
   history:null,traffic:null,conns:null,online:null,summary:null,toast:null,modal:null,dbSize:null,
@@ -121,15 +121,24 @@ function R(cb){if(cb)_rCallbacks.push(cb);if(_rTimer)return;_rTimer=requestAnima
 function _doRender(){
   var root=document.getElementById('root');
   try{
-  root.innerHTML='';
-  if(S.toast)root.appendChild(h('div',{className:'toast '+(S.toast.e?'toast-err':'toast-ok')},S.toast.m));
-  if(S.modal)root.appendChild(renderModal());
-  if(S.loading)return root.appendChild(loadingView(true));
-  if(!S.auth)return root.appendChild(renderLogin());
-  root.appendChild(renderApp());
+  var frag=document.createDocumentFragment();
+  if(S.toast)frag.appendChild(h('div',{className:'toast '+(S.toast.e?'toast-err':'toast-ok')},S.toast.m));
+  if(S.modal)frag.appendChild(renderModal());
+  if(S.loading){frag.appendChild(loadingView(true));root.replaceChildren(frag);return}
+  if(!S.auth){frag.appendChild(renderLogin());root.replaceChildren(frag);return}
+  frag.appendChild(renderApp());
+  root.replaceChildren(frag);
   }catch(err){var msg=String(err.message||err).replace(/\x3c/g,'&lt;');root.innerHTML='\x3cdiv style="color:#ef4444;padding:40px;font-family:monospace;font-size:13px"\x3e\x3cb\x3eRender error:\x3c/b\x3e\x3cbr\x3e\x3cpre\x3e'+msg+'\x3c/pre\x3e\x3c/div\x3e';console.error('R() error:',err)}
 }
 
+function _softUpdateLogin(){
+  var el=document.querySelector('.ls');if(el)el.textContent=S.setup?t('create_admin_pw'):t('enter_admin_pw');
+  var lt=document.querySelector('.lt');if(lt)lt.textContent=S.setup?t('initial_setup'):'';
+  var btn=document.querySelector('.lc .btn-p');if(btn)btn.textContent=S.setup?t('create_password'):t('sign_in');
+  var inp=document.querySelector('.lc input[type=password]');if(inp)inp.placeholder=t('password');
+  document.querySelectorAll('.lg button').forEach(function(b){if(b.textContent==='EN'||b.textContent==='\u0420\u0423'){b.className=b.textContent===(S.lang==='ru'?'\u0420\u0423':'EN')?'on':''}});
+  document.querySelectorAll('.tg button').forEach(function(b){var th=b.title;b.className=''});
+}
 function renderLogin(){
   var pw;var isS=S.setup;
   var card=h('div',{className:'lw'},h('div',{className:'lc'},
@@ -146,7 +155,7 @@ function renderLogin(){
         h('button',{className:S.theme==='dark'?'on':'',onClick:function(){setTheme('dark')},title:t('theme_dark')},'\u263E'),
         h('button',{className:S.theme==='light'?'on':'',onClick:function(){setTheme('light')},title:t('theme_light')},'\u2600'),
         h('button',{className:S.theme==='system'?'on':'',onClick:function(){setTheme('system')},title:t('theme_system')},'\u2699')))));
-  setTimeout(function(){if(pw){pw.addEventListener('keydown',function(e){if(e.key==='Enter')(isS?doSetup:doLogin)(pw.value)});pw.focus()}},50);
+  setTimeout(function(){if(pw){pw.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();(isS?doSetup:doLogin)(pw.value)}});pw.focus()}},50);
   return card;
 }
 
