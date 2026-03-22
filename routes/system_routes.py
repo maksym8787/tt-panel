@@ -112,7 +112,13 @@ async def restart_history(request: Request):
 async def get_panel_settings(request: Request):
     await require_auth(request)
     db = await asyncio.to_thread(load_panel_db)
-    defaults = {"session_ttl": 86400, "auto_renew_enabled": True, "auto_renew_days": 10}
+    defaults = {
+        "session_ttl": 86400,
+        "auto_renew_enabled": True,
+        "auto_renew_days": 10,
+        "max_history_days": 30,
+        "max_log_mb": 50,
+    }
     settings = db.get("panel_settings", {})
     for k, v in defaults.items():
         settings.setdefault(k, v)
@@ -132,6 +138,104 @@ async def update_panel_settings(request: Request):
         settings["auto_renew_enabled"] = bool(body["auto_renew_enabled"])
     if "auto_renew_days" in body:
         settings["auto_renew_days"] = max(1, min(int(body["auto_renew_days"]), 60))
+    if "max_history_days" in body:
+        days = int(body["max_history_days"])
+        settings["max_history_days"] = max(1, min(days, 365))
+    if "max_log_mb" in body:
+        mb = int(body["max_log_mb"])
+        settings["max_log_mb"] = max(5, min(mb, 500))
     db["panel_settings"] = settings
     await asyncio.to_thread(save_panel_db, db)
+    _apply_log_rotation(settings)
     return {"ok": True, "settings": settings}
+
+
+def _apply_log_rotation(settings):
+    import os
+    max_mb = settings.get("max_log_mb", 50)
+    try:
+        if LOG_FILE.exists() and LOG_FILE.stat().st_size > max_mb * 1024 * 1024:
+            rotated = LOG_FILE.with_suffix(".log.old")
+            if rotated.exists():
+                rotated.unlink()
+            LOG_FILE.rename(rotated)
+            subprocess.run(["systemctl", "reload", "trusttunnel"], timeout=5, capture_output=True)
+    except Exception as e:
+        logger.error("Log rotation error: %s", e)
+    try:
+        conf_dir = "/etc/systemd/journald.conf.d"
+        os.makedirs(conf_dir, exist_ok=True)
+        with open(os.path.join(conf_dir, "tt-panel.conf"), "w") as f:
+            f.write("[Journal]\nSystemMaxUse=%dM\n" % max_mb)
+    except Exception:
+        pass
+
+
+@app.get("/api/disk-info")
+async def disk_info(request: Request):
+    await require_auth(request)
+
+    def _query():
+        import os
+        result = {"items": []}
+        try:
+            st = os.statvfs("/")
+            total = st.f_frsize * st.f_blocks
+            free = st.f_frsize * st.f_bfree
+            result["disk_total_gb"] = round(total / 1073741824, 1)
+            result["disk_free_gb"] = round(free / 1073741824, 1)
+            result["disk_pct"] = round(100 * (total - free) / total, 1) if total > 0 else 0
+        except Exception:
+            pass
+        paths = [
+            ("/var/log/journal", "journald"),
+            (str(LOG_FILE), "trusttunnel log"),
+            (str(LOG_FILE) + ".1", "trusttunnel log.1"),
+        ]
+        from config import STATS_DB
+        paths.append((str(STATS_DB), "stats.db"))
+        for p, label in paths:
+            try:
+                from pathlib import Path
+                pp = Path(p)
+                if pp.is_dir():
+                    size = sum(f.stat().st_size for f in pp.rglob("*") if f.is_file())
+                elif pp.exists():
+                    size = pp.stat().st_size
+                else:
+                    continue
+                result["items"].append({"path": p, "label": label, "size_mb": round(size / 1048576, 1)})
+            except Exception:
+                pass
+        return result
+
+    return await asyncio.to_thread(_query)
+
+
+@app.post("/api/cleanup-logs")
+async def cleanup_logs(request: Request):
+    await require_auth(request)
+
+    def _run():
+        cleaned = []
+        try:
+            r = subprocess.run(
+                ["journalctl", "--vacuum-size=50M"],
+                capture_output=True, text=True, timeout=30
+            )
+            if "freed" in r.stdout:
+                cleaned.append("journald: " + r.stdout.strip().split("\n")[-1])
+        except Exception:
+            pass
+        try:
+            for suffix in [".2.gz", ".3.gz", ".4.gz", ".1"]:
+                old = LOG_FILE.with_name(LOG_FILE.name + suffix)
+                if old.exists():
+                    size = old.stat().st_size
+                    old.unlink()
+                    cleaned.append("removed %s (%.1f MB)" % (old.name, size / 1048576))
+        except Exception as e:
+            logger.error("Log cleanup error: %s", e)
+        return {"ok": True, "cleaned": cleaned}
+
+    return await asyncio.to_thread(_run)

@@ -70,7 +70,12 @@ def init_stats_db():
 
 def cleanup_old_data():
     global _last_vacuum_ts
-    cutoff = int(time.time()) - (MAX_HISTORY_DAYS * 86400)
+    try:
+        from auth import load_panel_db
+        days = load_panel_db().get("panel_settings", {}).get("max_history_days", MAX_HISTORY_DAYS)
+    except Exception:
+        days = MAX_HISTORY_DAYS
+    cutoff = int(time.time()) - (days * 86400)
     with get_db() as conn:
         conn.execute("PRAGMA busy_timeout=5000")
         c = conn.cursor()
