@@ -1,6 +1,11 @@
 from frontend.styles import CSS
 from frontend.translations import TRANSLATIONS_JS
-from frontend.app_js import PREAMBLE_JS, APP_JS
+from frontend.core_js import PREAMBLE_JS, CORE_JS
+from frontend.dashboard_js import DASHBOARD_JS
+from frontend.monitor_js import MONITOR_JS
+from frontend.users_js import USERS_JS
+from frontend.settings_js import SETTINGS_JS
+from frontend.init_js import INIT_JS
 
 FRONTEND_HTML = (
     '<!DOCTYPE html>\n'
@@ -19,7 +24,7 @@ FRONTEND_HTML = (
     '</head>\n'
     '<body>\n'
     '<div id="root"></div>\n'
-    '<script>\n' + PREAMBLE_JS + TRANSLATIONS_JS + APP_JS + '</script>\n'
+    '<script>\n' + PREAMBLE_JS + TRANSLATIONS_JS + CORE_JS + DASHBOARD_JS + MONITOR_JS + USERS_JS + SETTINGS_JS + INIT_JS + '</script>\n'
     '</body>\n'
     '</html>'
 )
