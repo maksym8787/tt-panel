@@ -367,12 +367,12 @@ function renderModal(){
 }
 
 function renderStatusBar(){
-  var st=S.status;var ok=st&&st.health==='connected';
+  var st=S.status;var hl=st&&st.health?st.health:{};var ok=hl.tun_up;var srv=st&&st.active_server;
   return h('div',{className:'status-bar'},
     h('span',{className:'dot '+(ok?'dot-on':'dot-off')}),
-    h('span',{style:{fontWeight:600}},ok?t('connected')+(st.active_server?' \u2014 '+st.active_server:''):t('disconnected')),
-    st&&st.latency_ms?h('span',{style:{color:'var(--tx3)',fontSize:'12px',fontFamily:'var(--m)',marginLeft:'auto'}},t('latency')+': '+st.latency_ms+'ms'):'',
-    st&&st.tun_ip?h('span',{style:{color:'var(--tx3)',fontSize:'12px',fontFamily:'var(--m)'}},t('tun_ip')+': '+st.tun_ip):'');
+    h('span',{style:{fontWeight:600}},ok?t('connected')+(srv?' \u2014 '+srv.name:''):t('disconnected')),
+    hl.latency_ms?h('span',{style:{color:'var(--tx3)',fontSize:'12px',fontFamily:'var(--m)',marginLeft:'auto'}},t('latency')+': '+hl.latency_ms+'ms'):'',
+    hl.tun_ip?h('span',{style:{color:'var(--tx3)',fontSize:'12px',fontFamily:'var(--m)'}},t('tun_ip')+': '+hl.tun_ip):'');
 }
 
 function renderServers(){
@@ -435,7 +435,7 @@ function renderAddServer(){
 }
 
 function renderMonitor(){
-  var st=S.status;var ok=st&&st.health==='connected';
+  var st=S.status;var hl=st&&st.health?st.health:{};var ok=hl.tun_up;var srv=st&&st.active_server;
   return h('div',null,
     h('div',{className:'card'},
       h('div',{className:'card-t'},t('monitor')),
@@ -445,20 +445,20 @@ function renderMonitor(){
           h('div',{className:'stat-v '+(ok?'on':'off')},ok?t('connected'):t('disconnected'))),
         h('div',{className:'stat'},
           h('div',{className:'stat-l'},t('active')),
-          h('div',{className:'stat-v'},st&&st.active_server?st.active_server:'\u2014')),
+          h('div',{className:'stat-v'},srv?srv.name:'\u2014')),
         h('div',{className:'stat'},
           h('div',{className:'stat-l'},t('latency')),
-          h('div',{className:'stat-v'},st&&st.latency_ms?st.latency_ms+'ms':'\u2014'))),
+          h('div',{className:'stat-v'},hl.latency_ms?hl.latency_ms+'ms':'\u2014'))),
       h('div',{className:'grid grid3'},
         h('div',{className:'stat'},
           h('div',{className:'stat-l'},t('tun_ip')),
-          h('div',{className:'stat-v',style:{fontSize:'14px'}},st&&st.tun_ip?st.tun_ip:'\u2014')),
+          h('div',{className:'stat-v',style:{fontSize:'14px'}},hl.tun_ip?hl.tun_ip:'\u2014')),
         h('div',{className:'stat'},
           h('div',{className:'stat-l'},t('uptime')),
-          h('div',{className:'stat-v',style:{fontSize:'14px'}},fmtUptime(st&&st.uptime_seconds))),
+          h('div',{className:'stat-v',style:{fontSize:'14px'}},fmtUptime(st?st.uptime_seconds:0))),
         h('div',{className:'stat'},
           h('div',{className:'stat-l'},t('hostname')),
-          h('div',{className:'stat-v',style:{fontSize:'14px'}},st&&st.active_server_hostname?st.active_server_hostname:'\u2014')))),
+          h('div',{className:'stat-v',style:{fontSize:'14px'}},srv?srv.hostname:'\u2014')))),
     h('div',{className:'card'},
       h('div',{className:'card-t'},t('service_controls')),
       h('div',{className:'bg'},
