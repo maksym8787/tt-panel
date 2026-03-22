@@ -39,6 +39,40 @@ async def get_settings(request: Request):
     return await asyncio.to_thread(_read)
 
 
+@app.get("/api/settings/structured")
+async def get_settings_structured(request: Request):
+    await require_auth(request)
+    from services.toml_settings import parse_vpn_structured, parse_hosts_structured, parse_rules_structured, get_schema
+
+    def _read():
+        return {
+            "vpn": parse_vpn_structured(),
+            "hosts": parse_hosts_structured(),
+            "rules": parse_rules_structured(),
+            "schema": get_schema(),
+        }
+
+    return await asyncio.to_thread(_read)
+
+
+@app.put("/api/settings/vpn")
+async def save_vpn_settings(request: Request):
+    await require_auth(request)
+    from services.toml_settings import save_vpn_structured
+    body = await request.json()
+    await asyncio.to_thread(save_vpn_structured, body)
+    return {"ok": True}
+
+
+@app.put("/api/settings/rules")
+async def save_rules_settings(request: Request):
+    await require_auth(request)
+    from services.toml_settings import save_rules_structured
+    body = await request.json()
+    await asyncio.to_thread(save_rules_structured, body.get("rules", []))
+    return {"ok": True}
+
+
 @app.put("/api/settings/{filename}")
 async def update_settings(filename: str, request: Request):
     await require_auth(request)

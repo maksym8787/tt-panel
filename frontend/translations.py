@@ -65,7 +65,20 @@ en:{
   export_csv:'Export CSV',import_csv:'Import CSV',import_success:'Imported {count} users',import_error:'Import error',
   auto_lock:'Auto-lock',auto_lock_desc:'Session timeout',minutes:'min',session_timeout:'Session timeout',
   cert_auto_renew:'Auto-renew certificate',cert_renew_days:'Days before expiry',cert_auto_renew_enabled:'Enabled',cert_auto_renew_disabled:'Disabled',
-  max_history_days:'Data retention',max_log_size:'Max log size',days:'days',cleanup_now:'Clean up',nothing_to_clean:'Nothing to clean'
+  max_history_days:'Data retention',max_log_size:'Max log size',days:'days',cleanup_now:'Clean up',nothing_to_clean:'Nothing to clean',
+  vpn_settings:'VPN Settings',protocol_settings:'Protocol Settings',
+  listen_addr:'Listen address',ipv6:'IPv6',allow_private:'Allow private networks',
+  speedtest:'Speedtest',ping:'Ping',auth_code:'Auth failure code',
+  timeout_tls:'TLS handshake',timeout_listener:'Client listener',timeout_connect:'Connection',timeout_tcp:'TCP idle',timeout_udp:'UDP idle',
+  seconds:'s',
+  http2_settings:'HTTP/2',quic_settings:'QUIC',
+  max_streams:'Max streams',frame_size:'Frame size',header_table:'Header table',conn_window:'Conn window',stream_window:'Stream window',
+  routing:'Routing',direct:'Direct',socks5:'SOCKS5',socks5_addr:'SOCKS5 address',
+  rules_settings:'Firewall Rules',add_rule:'Add rule',cidr:'CIDR',action:'Action',allow:'Allow',deny:'Deny',delete:'Delete',
+  tls_hosts:'TLS Hosts',host_type:'Type',hostname:'Hostname',cert_path:'Cert path',
+  raw_toml:'Raw TOML (advanced)',metrics_settings:'Metrics',metrics_addr:'Metrics address',metrics_timeout:'Timeout',
+  save_vpn:'Save VPN settings',save_rules:'Save rules',settings_saved:'Settings saved',
+  apply_after_save:'Apply changes after saving to activate'
 },
 ru:{
   dashboard:'\u041f\u0430\u043d\u0435\u043b\u044c',monitor:'\u041c\u043e\u043d\u0438\u0442\u043e\u0440',users:'\u041f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u0438',settings:'\u041d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0438',logs:'\u041b\u043e\u0433\u0438',
@@ -133,5 +146,18 @@ ru:{
   export_csv:'\u042d\u043a\u0441\u043f\u043e\u0440\u0442 CSV',import_csv:'\u0418\u043c\u043f\u043e\u0440\u0442 CSV',import_success:'\u0418\u043c\u043f\u043e\u0440\u0442\u0438\u0440\u043e\u0432\u0430\u043d\u043e {count} \u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u0435\u0439',import_error:'\u041e\u0448\u0438\u0431\u043a\u0430 \u0438\u043c\u043f\u043e\u0440\u0442\u0430',
   auto_lock:'\u0410\u0432\u0442\u043e\u0431\u043b\u043e\u043a\u0438\u0440\u043e\u0432\u043a\u0430',auto_lock_desc:'\u0422\u0430\u0439\u043c\u0430\u0443\u0442 \u0441\u0435\u0441\u0441\u0438\u0438',minutes:'\u043c\u0438\u043d',session_timeout:'\u0422\u0430\u0439\u043c\u0430\u0443\u0442 \u0441\u0435\u0441\u0441\u0438\u0438',
   cert_auto_renew:'\u0410\u0432\u0442\u043e-\u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u0438\u0435 \u0441\u0435\u0440\u0442\u0438\u0444\u0438\u043a\u0430\u0442\u0430',cert_renew_days:'\u0414\u043d\u0435\u0439 \u0434\u043e \u0438\u0441\u0442\u0435\u0447\u0435\u043d\u0438\u044f',cert_auto_renew_enabled:'\u0412\u043a\u043b\u044e\u0447\u0435\u043d\u043e',cert_auto_renew_disabled:'\u041e\u0442\u043a\u043b\u044e\u0447\u0435\u043d\u043e',
-  max_history_days:'\u0425\u0440\u0430\u043d\u0435\u043d\u0438\u0435 \u0434\u0430\u043d\u043d\u044b\u0445',max_log_size:'\u041c\u0430\u043a\u0441. \u0440\u0430\u0437\u043c\u0435\u0440 \u043b\u043e\u0433\u043e\u0432',days:'\u0434\u043d\u0435\u0439',cleanup_now:'\u041e\u0447\u0438\u0441\u0442\u0438\u0442\u044c',nothing_to_clean:'\u041d\u0435\u0447\u0435\u0433\u043e \u043e\u0447\u0438\u0449\u0430\u0442\u044c'
+  max_history_days:'\u0425\u0440\u0430\u043d\u0435\u043d\u0438\u0435 \u0434\u0430\u043d\u043d\u044b\u0445',max_log_size:'\u041c\u0430\u043a\u0441. \u0440\u0430\u0437\u043c\u0435\u0440 \u043b\u043e\u0433\u043e\u0432',days:'\u0434\u043d\u0435\u0439',cleanup_now:'\u041e\u0447\u0438\u0441\u0442\u0438\u0442\u044c',nothing_to_clean:'\u041d\u0435\u0447\u0435\u0433\u043e \u043e\u0447\u0438\u0449\u0430\u0442\u044c',
+  vpn_settings:'\u041d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0438 VPN',protocol_settings:'\u041d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0438 \u043f\u0440\u043e\u0442\u043e\u043a\u043e\u043b\u043e\u0432',
+  listen_addr:'\u0410\u0434\u0440\u0435\u0441',ipv6:'IPv6',allow_private:'\u041f\u0440\u0438\u0432\u0430\u0442\u043d\u044b\u0435 \u0441\u0435\u0442\u0438',
+  speedtest:'Speedtest',ping:'Ping',auth_code:'\u041a\u043e\u0434 \u043e\u0448\u0438\u0431\u043a\u0438 \u0430\u0432\u0442.',
+  timeout_tls:'TLS \u0440\u0443\u043a\u043e\u043f\u043e\u0436\u0430\u0442\u0438\u0435',timeout_listener:'\u041e\u0436\u0438\u0434\u0430\u043d\u0438\u0435 \u043a\u043b\u0438\u0435\u043d\u0442\u0430',timeout_connect:'\u041f\u043e\u0434\u043a\u043b\u044e\u0447\u0435\u043d\u0438\u0435',timeout_tcp:'TCP idle',timeout_udp:'UDP idle',
+  seconds:'\u0441',
+  http2_settings:'HTTP/2',quic_settings:'QUIC',
+  max_streams:'\u041c\u0430\u043a\u0441. \u043f\u043e\u0442\u043e\u043a\u043e\u0432',frame_size:'\u0420\u0430\u0437\u043c\u0435\u0440 \u0444\u0440\u0435\u0439\u043c\u0430',header_table:'\u0422\u0430\u0431\u043b\u0438\u0446\u0430 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043a\u043e\u0432',conn_window:'\u041e\u043a\u043d\u043e \u0441\u043e\u0435\u0434.',stream_window:'\u041e\u043a\u043d\u043e \u043f\u043e\u0442\u043e\u043a\u0430',
+  routing:'\u041c\u0430\u0440\u0448\u0440\u0443\u0442\u0438\u0437\u0430\u0446\u0438\u044f',direct:'\u041f\u0440\u044f\u043c\u043e\u0439',socks5:'SOCKS5',socks5_addr:'\u0410\u0434\u0440\u0435\u0441 SOCKS5',
+  rules_settings:'\u041f\u0440\u0430\u0432\u0438\u043b\u0430 \u0444\u0438\u043b\u044c\u0442\u0440\u0430\u0446\u0438\u0438',add_rule:'\u0414\u043e\u0431\u0430\u0432\u0438\u0442\u044c',cidr:'CIDR',action:'\u0414\u0435\u0439\u0441\u0442\u0432\u0438\u0435',allow:'\u0420\u0430\u0437\u0440\u0435\u0448\u0438\u0442\u044c',deny:'\u0417\u0430\u043f\u0440\u0435\u0442\u0438\u0442\u044c',delete:'\u0423\u0434\u0430\u043b\u0438\u0442\u044c',
+  tls_hosts:'TLS \u0445\u043e\u0441\u0442\u044b',host_type:'\u0422\u0438\u043f',hostname:'\u0425\u043e\u0441\u0442',cert_path:'\u041f\u0443\u0442\u044c \u0441\u0435\u0440\u0442.',
+  raw_toml:'Raw TOML',metrics_settings:'\u041c\u0435\u0442\u0440\u0438\u043a\u0438',metrics_addr:'\u0410\u0434\u0440\u0435\u0441 \u043c\u0435\u0442\u0440\u0438\u043a',metrics_timeout:'\u0422\u0430\u0439\u043c\u0430\u0443\u0442',
+  save_vpn:'\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c VPN',save_rules:'\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c \u043f\u0440\u0430\u0432\u0438\u043b\u0430',settings_saved:'\u041d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0438 \u0441\u043e\u0445\u0440\u0430\u043d\u0435\u043d\u044b',
+  apply_after_save:'\u041f\u0440\u0438\u043c\u0435\u043d\u0438\u0442\u0435 \u0438\u0437\u043c\u0435\u043d\u0435\u043d\u0438\u044f \u043f\u043e\u0441\u043b\u0435 \u0441\u043e\u0445\u0440\u0430\u043d\u0435\u043d\u0438\u044f'
 }};'''
