@@ -71,7 +71,7 @@ function drawMonitorCharts(){if(!window.Chart){setTimeout(drawMonitorCharts,200)
 // ─── User actions (#14 modal dialogs, #15 loading) ──────
 async function toggleUser(u,btn){await withLoading(btn,async function(){try{var r=await api('/users/'+u+'/toggle',{method:'PUT'});var user=S.users.find(function(x){return x.username===u});if(user)user.enabled=r.enabled;toast(r.enabled?t('user_enabled'):t('user_disabled'));R()}catch(e){toast(e.message,true)}})}
 function copyPassword(pw){navigator.clipboard.writeText(pw).then(function(){toast(t('copied'))}).catch(function(){toast('Copy failed',true)})}
-async function addUser(u,p){try{var r=await api('/users',{method:'POST',body:JSON.stringify({username:u,password:p})});toast(t('user_created')+' "'+u+'" ('+t('pass_label')+': '+r.password+')');S.modal=null;loadDash()}catch(e){toast(e.message,true)}}
+async function addUser(u,p,note){try{var r=await api('/users',{method:'POST',body:JSON.stringify({username:u,password:p})});if(note){await api('/users/'+u+'/note',{method:'PUT',body:JSON.stringify({note:note})});S.userNotes[u]=note}toast(t('user_created')+' "'+u+'" ('+t('pass_label')+': '+r.password+')');S.modal=null;loadDash()}catch(e){toast(e.message,true)}}
 async function deleteUser(u){S.modal={t:'confirm',title:t('delete_user'),msg:t('delete_confirm')+' "'+u+'"?',onConfirm:async function(btn){await withLoading(btn,async function(){try{await api('/users/'+u,{method:'DELETE'});toast(t('deleted'));S.modal=null;loadDash()}catch(e){toast(e.message,true)}})}};R()}
 async function chgPass(u){S.modal={t:'chgpass',u:u};R()}
 async function doChgPass(u,p,btn){if(!p){toast(t('password')+' required',true);return}await withLoading(btn,async function(){try{await api('/users/'+u,{method:'PUT',body:JSON.stringify({password:p})});toast(t('changed'));S.modal=null;loadDash()}catch(e){toast(e.message,true)}})}
@@ -352,13 +352,11 @@ function renderDash(){
     h('div',{className:'card'},
       h('div',{className:'card-t'},t('controls')),
       h('div',{className:'bg'},
+        h('button',{className:'btn btn-sm btn-p',onClick:function(){S.modal={t:'add'};R()}},'\u2795 '+t('add_user')),
         h('button',{className:'btn btn-sm',onClick:function(e){svcAct('restart',e.currentTarget)}},t('restart')),
         h('button',{className:'btn btn-sm',onClick:function(e){svcAct('reload',e.currentTarget)}},t('reload_tls')),
         h('button',{className:'btn btn-sm btn-d',onClick:function(e){svcAct('stop',e.currentTarget)}},t('stop')),
         h('button',{className:'btn btn-sm',onClick:renewCert},t('renew_cert')))),
-
-    h('div',{style:{marginBottom:'14px'}},
-      h('button',{className:'btn btn-sm btn-p',onClick:function(){S.tab='users';S.modal={t:'add'};R()}},'\u2795 '+t('quick_add_user'))),
 
     h('div',{className:'card'},
       h('div',{className:'card-t'},t('server_info')),
@@ -550,13 +548,14 @@ function renderModal(){
   var close=function(){S.modal=null;R()};
   var content;
   if(m.t==='add'){
-    var ni,pi;
+    var ni,pi,nti;
     content=h('div',{className:'md',role:'dialog','aria-modal':'true','aria-label':t('add_vpn_user')},
       h('div',{className:'md-t'},t('add_vpn_user')),
       h('div',{className:'fg'},h('label',{className:'fl'},t('username')),ni=h('input',{className:'input',placeholder:'e.g. phone-maks'})),
       h('div',{className:'fg'},h('label',{className:'fl'},t('password_empty_auto')),pi=h('input',{className:'input input-m',placeholder:'auto'})),
+      h('div',{className:'fg'},h('label',{className:'fl'},t('note')),nti=h('input',{className:'input',placeholder:t('note_placeholder'),maxLength:200})),
       h('div',{className:'bg'},
-        h('button',{className:'btn btn-p',onClick:function(){addUser(ni.value,pi.value)}},t('create')),
+        h('button',{className:'btn btn-p',onClick:function(){addUser(ni.value,pi.value,nti.value.trim())}},t('create')),
         h('button',{className:'btn',onClick:close},t('cancel'))));
     setTimeout(function(){if(ni)ni.focus()},50);
   } else if(m.t==='cfg'){
