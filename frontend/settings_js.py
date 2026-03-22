@@ -2,33 +2,7 @@ SETTINGS_JS = r'''
 var _vpnEdits={};
 var _rulesEdits=null;
 var _settingsExpand={protocol:false,rawToml:false};
-var _tips={
-  listen_address:'Address and port the VPN listens on. Default: 0.0.0.0:443',
-  ipv6_available:'Enable IPv6 support for outgoing connections',
-  allow_private:'Allow connections to private networks (10.x, 192.168.x, etc)',
-  speedtest:'Enable built-in speed test endpoint',
-  ping:'Enable built-in ping endpoint',
-  auth_code:'HTTP status code returned on auth failure. 407=Proxy Auth Required, 405=Method Not Allowed',
-  timeout_tls:'Max time for TLS handshake (1-120s). Default: 10',
-  timeout_listener:'Max idle time waiting for client data (10-86400s). Default: 600',
-  timeout_connect:'Max time to establish outgoing connection (1-300s). Default: 30',
-  timeout_tcp:'Idle timeout for TCP tunnels (60-2592000s). Default: 604800 (7 days)',
-  timeout_udp:'Idle timeout for UDP tunnels (10-86400s). Default: 300',
-  max_streams:'Max concurrent HTTP/2 or QUIC streams per connection',
-  frame_size:'Max HTTP/2 frame size in bytes',
-  header_table:'HPACK header table size for HTTP/2',
-  conn_window:'Flow control window for the connection',
-  stream_window:'Flow control window for each stream',
-  metrics_addr:'Address for Prometheus metrics endpoint. Default: 127.0.0.1:1987',
-  metrics_timeout:'Request timeout for metrics scraping',
-  routing:'Direct = connect directly. SOCKS5 = route through proxy',
-  session_timeout:'Auto-logout after inactivity period',
-  cert_auto_renew:'Automatically renew TLS certificate before expiry',
-  cert_renew_days:'Start renewal this many days before expiry',
-  max_history_days:'Keep monitoring data for this many days',
-  max_log_mb:'Maximum log file size before rotation'
-};
-function tip(key){var text=_tips[key];if(!text)return null;
+function tip(key){var text=t('tip_'+key);if(!text||text===('tip_'+key))return null;
   var wrap=h('span',{className:'tip-wrap',style:{position:'relative',display:'inline-flex',marginLeft:'4px'}});
   var icon=h('span',{style:{cursor:'help',fontSize:'11px',color:'var(--ac)',display:'inline-flex',alignItems:'center',justifyContent:'center',width:'16px',height:'16px',borderRadius:'50%',border:'1px solid var(--ac)',flexShrink:'0',fontStyle:'normal',fontWeight:'700',lineHeight:'1'}},'i');
   var popup=h('div',{style:{display:'none',position:'absolute',bottom:'22px',left:'50%',transform:'translateX(-50%)',background:'var(--sf2)',border:'1px solid var(--bd)',borderRadius:'6px',padding:'8px 10px',fontSize:'11px',color:'var(--tx)',width:'220px',zIndex:'1000',boxShadow:'0 4px 12px rgba(0,0,0,.3)',lineHeight:'1.4',whiteSpace:'normal'}},text);
