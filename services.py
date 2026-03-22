@@ -227,6 +227,7 @@ def _do_cert_renewal(domain: str) -> dict:
                 shutil.copy2(str(le_dir / "privkey.pem"), str(CERTS_DIR / "key.pem"))
                 logger.info("Certs copied from %s to %s", le_dir, CERTS_DIR)
             subprocess.run(["systemctl", "start", "trusttunnel"], timeout=10)
+            _log_restart("cert_renewal")
             return {"ok": True, "message": "Certificate renewed and installed"}
         subprocess.run(["systemctl", "start", "trusttunnel"], timeout=10)
         logger.error("Certbot failed (rc=%d): %s", r2.returncode, r2.stderr[:500])
@@ -252,17 +253,23 @@ def auto_renew_cert_if_needed():
     if now - _last_cert_check < 3600:
         return
     _last_cert_check = now
+    from auth import load_panel_db
+    panel = load_panel_db()
+    ps = panel.get("panel_settings", {})
+    if not ps.get("auto_renew_enabled", True):
+        return
+    renew_days = ps.get("auto_renew_days", CERT_AUTO_RENEW_DAYS)
     cert_info = get_cert_days_remaining()
     if cert_info is None:
         return
     days = cert_info.get("days", 999)
-    if days <= CERT_AUTO_RENEW_DAYS:
+    if days <= renew_days:
         local_hour = time.localtime().tm_hour
         if local_hour < 3 or local_hour >= 5:
             logger.info("Cert expires in %d days, will auto-renew at 03:00-05:00", days)
             return
         domain = get_domain()
-        logger.info("Auto-renewing certificate (expires in %d days, threshold=%d). VPN will be briefly stopped.", days, CERT_AUTO_RENEW_DAYS)
+        logger.info("Auto-renewing certificate (expires in %d days, threshold=%d). VPN will be briefly stopped.", days, renew_days)
         result = _do_cert_renewal(domain)
         if result["ok"]:
             logger.info("Auto-renewal succeeded: %s", result["message"])
@@ -272,6 +279,19 @@ def auto_renew_cert_if_needed():
         logger.debug("Certificate OK: %d days remaining", days)
 
 
+def _log_restart(reason):
+    from auth import load_panel_db, save_panel_db
+    from datetime import datetime
+    try:
+        panel = load_panel_db()
+        history = panel.get("restart_history", [])
+        history.insert(0, {"ts": datetime.now().isoformat(timespec="seconds"), "reason": reason})
+        panel["restart_history"] = history[:100]
+        save_panel_db(panel)
+    except Exception as e:
+        logger.error("Failed to log restart: %s", e)
+
+
 def _do_deferred_reload():
     global _pending_reload
     with _reload_lock:
@@ -279,6 +299,7 @@ def _do_deferred_reload():
     try:
         subprocess.run(["systemctl", "restart", "trusttunnel"], timeout=10)
         logger.info("Service restarted (debounced)")
+        _log_restart("config_change")
     except Exception as e:
         logger.error("Service restart error: %s", e)
 
@@ -294,7 +315,7 @@ def schedule_reload():
         _reload_timer.start()
 
 
-def apply_reload_now():
+def apply_reload_now(reason="manual"):
     global _pending_reload, _reload_timer
     with _reload_lock:
         if _reload_timer is not None:
@@ -304,6 +325,7 @@ def apply_reload_now():
     try:
         subprocess.run(["systemctl", "restart", "trusttunnel"], timeout=10)
         logger.info("Service restarted (immediate)")
+        _log_restart(reason)
     except Exception as e:
         logger.error("Service restart error: %s", e)
 

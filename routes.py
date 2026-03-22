@@ -605,8 +605,11 @@ async def control_service(action: str, request: Request):
         raise HTTPException(400)
 
     def _run():
+        from services import _log_restart
         try:
             r = subprocess.run(["systemctl", action, "trusttunnel"], capture_output=True, text=True, timeout=15)
+            if r.returncode == 0 and action in ("restart", "start"):
+                _log_restart("manual_" + action)
             return {"ok": r.returncode == 0, "output": "Service action completed" if r.returncode == 0 else "Service action failed"}
         except Exception as e:
             logger.error("Service %s error: %s", action, e)
@@ -629,6 +632,136 @@ async def change_admin_password(request: Request):
     resp = JSONResponse({"ok": True})
     resp.delete_cookie("tt_session")
     return resp
+
+
+@app.get("/api/restart-history")
+async def restart_history(request: Request):
+    await require_auth(request)
+    db = await asyncio.to_thread(load_panel_db)
+    return {"history": db.get("restart_history", [])}
+
+
+@app.put("/api/users/{username}/note")
+async def set_user_note(username: str, request: Request):
+    await require_auth(request)
+    body = await request.json()
+    note = body.get("note", "").strip()[:200]
+    db = await asyncio.to_thread(load_panel_db)
+    notes = db.get("user_notes", {})
+    if note:
+        notes[username] = note
+    else:
+        notes.pop(username, None)
+    db["user_notes"] = notes
+    await asyncio.to_thread(save_panel_db, db)
+    return {"ok": True}
+
+
+@app.get("/api/user-notes")
+async def get_user_notes(request: Request):
+    await require_auth(request)
+    db = await asyncio.to_thread(load_panel_db)
+    return {"notes": db.get("user_notes", {})}
+
+
+@app.get("/api/panel-settings")
+async def get_panel_settings(request: Request):
+    await require_auth(request)
+    db = await asyncio.to_thread(load_panel_db)
+    defaults = {"session_ttl": 86400, "auto_renew_enabled": True, "auto_renew_days": 10}
+    settings = db.get("panel_settings", {})
+    for k, v in defaults.items():
+        settings.setdefault(k, v)
+    return {"settings": settings}
+
+
+@app.put("/api/panel-settings")
+async def update_panel_settings(request: Request):
+    await require_auth(request)
+    body = await request.json()
+    db = await asyncio.to_thread(load_panel_db)
+    settings = db.get("panel_settings", {})
+    if "session_ttl" in body:
+        ttl = int(body["session_ttl"])
+        settings["session_ttl"] = max(300, min(ttl, 604800))
+    if "auto_renew_enabled" in body:
+        settings["auto_renew_enabled"] = bool(body["auto_renew_enabled"])
+    if "auto_renew_days" in body:
+        settings["auto_renew_days"] = max(1, min(int(body["auto_renew_days"]), 60))
+    db["panel_settings"] = settings
+    await asyncio.to_thread(save_panel_db, db)
+    return {"ok": True, "settings": settings}
+
+
+@app.get("/api/users/export")
+async def export_users(request: Request):
+    await require_auth(request)
+    clients = await asyncio.to_thread(parse_credentials)
+    db = await asyncio.to_thread(load_panel_db)
+    notes = db.get("user_notes", {})
+    lines = ["username,password,enabled,created_at,note"]
+    for c in clients:
+        note = notes.get(c["username"], "").replace('"', '""')
+        lines.append(f'"{c["username"]}","{c["password"]}",{c.get("enabled", True)},"{c.get("created_at", "")}","{note}"')
+    from fastapi.responses import Response
+    return Response(
+        content="\n".join(lines),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=users.csv"}
+    )
+
+
+@app.post("/api/users/import")
+async def import_users(request: Request):
+    await require_auth(request)
+    body = await request.json()
+    csv_data = body.get("csv", "")
+    if not csv_data:
+        raise HTTPException(400, "CSV data required")
+    lines = csv_data.strip().split("\n")
+    if len(lines) < 2:
+        raise HTTPException(400, "No data rows")
+    clients = await asyncio.to_thread(parse_credentials)
+    existing = {c["username"] for c in clients}
+    db = await asyncio.to_thread(load_panel_db)
+    notes = db.get("user_notes", {})
+    added = 0
+    for line in lines[1:]:
+        parts = []
+        in_quote = False
+        current = ""
+        for ch in line:
+            if ch == '"':
+                in_quote = not in_quote
+            elif ch == ',' and not in_quote:
+                parts.append(current.strip())
+                current = ""
+            else:
+                current += ch
+        parts.append(current.strip())
+        if len(parts) < 2:
+            continue
+        username = parts[0].strip('"')
+        password = parts[1].strip('"')
+        if not username or not re.match(r'^[a-zA-Z0-9_\-]{1,64}$', username):
+            continue
+        if username in existing:
+            continue
+        enabled = parts[2].strip().lower() != "false" if len(parts) > 2 else True
+        created = parts[3].strip('"') if len(parts) > 3 else datetime.now().isoformat(timespec="seconds")
+        note = parts[4].strip('"') if len(parts) > 4 else ""
+        clients.append({"username": username, "password": password or generate_password(),
+                        "enabled": enabled, "created_at": created or datetime.now().isoformat(timespec="seconds")})
+        existing.add(username)
+        if note:
+            notes[username] = note
+        added += 1
+    if added > 0:
+        await asyncio.to_thread(write_credentials, clients)
+        db["user_notes"] = notes
+        await asyncio.to_thread(save_panel_db, db)
+        schedule_reload()
+    return {"ok": True, "added": added}
 
 
 @app.get("/", response_class=HTMLResponse)
