@@ -39,7 +39,7 @@ async def add_user(request: Request):
         "enabled": True,
     })
     await asyncio.to_thread(write_credentials, clients)
-    schedule_reload()
+    schedule_reload("user_add:" + username)
     return {"ok": True, "username": username, "password": password}
 
 
@@ -60,7 +60,7 @@ async def update_user(username: str, request: Request):
     if not found:
         raise HTTPException(404, "Not found")
     await asyncio.to_thread(write_credentials, clients)
-    schedule_reload()
+    schedule_reload("password_change:" + username)
     return {"ok": True}
 
 
@@ -72,7 +72,7 @@ async def delete_user(username: str, request: Request):
     if len(new) == len(clients):
         raise HTTPException(404, "Not found")
     await asyncio.to_thread(write_credentials, new)
-    schedule_reload()
+    schedule_reload("user_delete:" + username)
     return {"ok": True}
 
 
@@ -89,7 +89,8 @@ async def toggle_user(username: str, request: Request):
     if not found:
         raise HTTPException(404, "Not found")
     await asyncio.to_thread(write_credentials, clients)
-    schedule_reload()
+    action = "user_enable" if c["enabled"] else "user_disable"
+    schedule_reload(action + ":" + username)
     return {"ok": True, "enabled": c["enabled"]}
 
 
@@ -194,5 +195,5 @@ async def import_users(request: Request):
         await asyncio.to_thread(write_credentials, clients)
         db["user_notes"] = notes
         await asyncio.to_thread(save_panel_db, db)
-        schedule_reload()
+        schedule_reload("import_csv:" + str(added) + " users")
     return {"ok": True, "added": added}

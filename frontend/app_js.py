@@ -367,10 +367,11 @@ function renderDash(){
       h('div',{className:'card-t'},t('restart_history')),
       S.restartHistory&&S.restartHistory.length?h('div',{className:'tbl-wrap'},
         h('table',{className:'tbl'},
-          h('thead',null,h('tr',null,h('th',null,t('restart_time')),h('th',null,t('restart_reason')))),
-          h('tbody',null,S.restartHistory.map(function(r){var reasonKey='reason_'+r.reason;return h('tr',null,
-            h('td',null,r.time?new Date(r.time*1000).toLocaleString():'\u2014'),
-            h('td',null,t(reasonKey)!==reasonKey?t(reasonKey):r.reason))})))):
+          h('thead',null,h('tr',null,h('th',null,t('restart_time')),h('th',null,t('restart_reason')),h('th',null,t('detail')))),
+          h('tbody',null,S.restartHistory.slice(0,20).map(function(r){var reasonKey='reason_'+r.reason;var reasonText=t(reasonKey)!==reasonKey?t(reasonKey):r.reason;var det=r.detail||'';var detParts=det.split(':');var detReason=detParts[0]?'reason_'+detParts[0]:'';var detUser=detParts[1]||'';var detText=detReason&&t(detReason)!==detReason?t(detReason)+(detUser?' \u2014 '+detUser:''):det;return h('tr',null,
+            h('td',null,r.ts||'\u2014'),
+            h('td',null,reasonText),
+            h('td',{style:{color:'var(--tx3)'}},detText))})))):
         h('div',{style:{color:'var(--tx3)',fontSize:'12px',textAlign:'center',padding:'12px 0'}},t('no_restart_history')))
   );
 }
