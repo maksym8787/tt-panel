@@ -508,7 +508,20 @@ function renderSettings(){
   var s=S.settings;if(!s.vpn_toml&&s.vpn_toml!==''){loadSettings();return h('div',{className:'tab-content'},h('div',{className:'skeleton skel-card'}),h('div',{className:'skeleton skel-card'}))}
   var va,ra;var ps=S.panelSettings||{};
   var ttlOpts=[{v:300,l:'5 '+t('minutes')},{v:900,l:'15 '+t('minutes')},{v:1800,l:'30 '+t('minutes')},{v:3600,l:'1h'},{v:14400,l:'4h'},{v:43200,l:'12h'},{v:86400,l:'24h'}];
+  var renewOn=ps.auto_renew_enabled!==false;
   return h('div',{className:'tab-content'},
+    h('div',{className:'card'},
+      h('div',{className:'card-t'},t('settings')),
+      h('div',{style:{display:'flex',gap:'16px',flexWrap:'wrap',alignItems:'flex-end'}},
+        h('div',{style:{flex:'1',minWidth:'160px'}},
+          h('div',{className:'fl'},t('session_timeout')),
+          h('select',{className:'input',style:{maxWidth:'180px'},value:String(ps.session_ttl||86400),onChange:function(e){var val=parseInt(e.target.value);api('/panel-settings',{method:'PUT',body:JSON.stringify({session_ttl:val})}).then(function(){if(!S.panelSettings)S.panelSettings={};S.panelSettings.session_ttl=val;toast(t('saved'))}).catch(function(er){toast(er.message,true)})}},ttlOpts.map(function(o){return h('option',{value:String(o.v),selected:o.v===(ps.session_ttl||86400)},o.l)}))),
+        h('div',{style:{flex:'1',minWidth:'160px'}},
+          h('div',{className:'fl'},t('cert_auto_renew')),
+          h('button',{className:'btn btn-sm'+(renewOn?' btn-d':' btn-p'),style:{minWidth:'100px'},onClick:function(){var nv=!renewOn;api('/panel-settings',{method:'PUT',body:JSON.stringify({auto_renew_enabled:nv})}).then(function(){if(!S.panelSettings)S.panelSettings={};S.panelSettings.auto_renew_enabled=nv;toast(t('saved'));R()}).catch(function(er){toast(er.message,true)})}},renewOn?t('btn_disable'):t('btn_enable'))),
+        h('div',{style:{flex:'0',minWidth:'120px'}},
+          h('div',{className:'fl'},t('cert_renew_days')),
+          h('input',{className:'input',type:'number',min:'1',max:'60',style:{maxWidth:'80px'},value:String(ps.auto_renew_days||10),onChange:function(e){var val=parseInt(e.target.value);if(val<1||val>60)return;api('/panel-settings',{method:'PUT',body:JSON.stringify({auto_renew_days:val})}).then(function(){if(!S.panelSettings)S.panelSettings={};S.panelSettings.auto_renew_days=val;toast(t('saved'))}).catch(function(er){toast(er.message,true)})}})))),
     h('div',{className:'card'},h('div',{className:'card-t'},'vpn.toml'),
       va=h('textarea',{className:'input input-m',style:{minHeight:'200px'}},s.vpn_toml||''),
       h('button',{className:'btn btn-sm',style:{marginTop:'10px'},onClick:function(){saveCfg('vpn_toml',va.value)}},t('save'))),
@@ -516,21 +529,7 @@ function renderSettings(){
       ra=h('textarea',{className:'input input-m',style:{minHeight:'120px'}},s.rules_toml||''),
       h('button',{className:'btn btn-sm',style:{marginTop:'10px'},onClick:function(){saveCfg('rules_toml',ra.value)}},t('save'))),
     h('div',{className:'card'},h('div',{className:'card-t'},'hosts.toml ('+t('read_only')+')'),
-      h('div',{className:'cb'},s.hosts_toml||'')),
-    h('div',{className:'card'},
-      h('div',{className:'card-t'},t('session_timeout')),
-      h('div',{className:'fg'},
-        h('label',{className:'fl'},t('auto_lock_desc')),
-        h('select',{className:'input',style:{maxWidth:'200px'},value:String(ps.session_ttl||3600),onChange:function(e){var val=parseInt(e.target.value);api('/panel-settings',{method:'PUT',body:JSON.stringify({session_ttl:val})}).then(function(){if(!S.panelSettings)S.panelSettings={};S.panelSettings.session_ttl=val;toast(t('saved'))}).catch(function(er){toast(er.message,true)})}},ttlOpts.map(function(o){return h('option',{value:String(o.v),selected:o.v===(ps.session_ttl||3600)},o.l)})))),
-    h('div',{className:'card'},
-      h('div',{className:'card-t'},t('cert_auto_renew')),
-      h('div',{style:{display:'flex',gap:'16px',alignItems:'center',flexWrap:'wrap'}},
-        h('div',{className:'fg'},
-          h('label',{className:'fl'},t('cert_auto_renew')),
-          h('button',{className:'btn btn-sm'+(ps.cert_auto_renew?' btn-p':''),onClick:function(){var nv=!ps.cert_auto_renew;api('/panel-settings',{method:'PUT',body:JSON.stringify({cert_auto_renew:nv})}).then(function(){if(!S.panelSettings)S.panelSettings={};S.panelSettings.cert_auto_renew=nv;toast(t('saved'));R()}).catch(function(er){toast(er.message,true)})}},ps.cert_auto_renew?t('cert_auto_renew_enabled'):t('cert_auto_renew_disabled'))),
-        h('div',{className:'fg'},
-          h('label',{className:'fl'},t('cert_renew_days')),
-          h('input',{className:'input',type:'number',min:'1',max:'60',style:{maxWidth:'100px'},value:String(ps.cert_renew_days||14),onChange:function(e){var val=parseInt(e.target.value);if(val<1||val>60)return;api('/panel-settings',{method:'PUT',body:JSON.stringify({cert_renew_days:val})}).then(function(){if(!S.panelSettings)S.panelSettings={};S.panelSettings.cert_renew_days=val;toast(t('saved'))}).catch(function(er){toast(er.message,true)})}})))));
+      h('div',{className:'cb'},s.hosts_toml||'')));
 }
 
 // ─── Logs ───────────────────────────────────────────────
