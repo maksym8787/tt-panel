@@ -28,24 +28,34 @@ var _tips={
   max_history_days:'Keep monitoring data for this many days',
   max_log_mb:'Maximum log file size before rotation'
 };
-function tip(key){var text=_tips[key];if(!text)return null;return h('span',{style:{cursor:'help',fontSize:'11px',color:'var(--ac)',marginLeft:'4px',display:'inline-flex',alignItems:'center',justifyContent:'center',width:'14px',height:'14px',borderRadius:'50%',border:'1px solid var(--ac)',flexShrink:'0'},title:text},'\u2139')}
-function settingToggle(obj,key,label,tipKey){
+function tip(key){var text=_tips[key];if(!text)return null;
+  var wrap=h('span',{className:'tip-wrap',style:{position:'relative',display:'inline-flex',marginLeft:'4px'}});
+  var icon=h('span',{style:{cursor:'help',fontSize:'11px',color:'var(--ac)',display:'inline-flex',alignItems:'center',justifyContent:'center',width:'16px',height:'16px',borderRadius:'50%',border:'1px solid var(--ac)',flexShrink:'0',fontStyle:'normal',fontWeight:'700',lineHeight:'1'}},'i');
+  var popup=h('div',{style:{display:'none',position:'absolute',bottom:'22px',left:'50%',transform:'translateX(-50%)',background:'var(--sf2)',border:'1px solid var(--bd)',borderRadius:'6px',padding:'8px 10px',fontSize:'11px',color:'var(--tx)',width:'220px',zIndex:'1000',boxShadow:'0 4px 12px rgba(0,0,0,.3)',lineHeight:'1.4',whiteSpace:'normal'}},text);
+  icon.addEventListener('mouseenter',function(){popup.style.display='block'});
+  icon.addEventListener('mouseleave',function(){popup.style.display='none'});
+  icon.addEventListener('touchstart',function(e){e.preventDefault();popup.style.display=popup.style.display==='none'?'block':'none'});
+  wrap.appendChild(icon);wrap.appendChild(popup);return wrap}
+function _setVpnEdit(section,key,val){
+  if(section){if(!_vpnEdits[section])_vpnEdits[section]={};_vpnEdits[section][key]=val}else{_vpnEdits[key]=val}
+}
+function settingToggle(obj,key,label,tipKey,section){
   return h('div',{style:{display:'flex',alignItems:'center',gap:'6px'}},
-    h('button',{className:'btn btn-xs'+(obj[key]?' btn-p':''),style:{minWidth:'40px'},onClick:function(){obj[key]=!obj[key];R()}},obj[key]?'ON':'OFF'),
+    h('button',{className:'btn btn-xs'+(obj[key]?' btn-p':''),style:{minWidth:'40px'},onClick:function(){obj[key]=!obj[key];_setVpnEdit(section,key,obj[key]);R()}},obj[key]?'ON':'OFF'),
     h('span',{style:{fontSize:'11px',color:'var(--tx2)'}},label),
     tipKey?tip(tipKey):null)
 }
-function settingNumber(obj,key,label,suffix,min,max,tipKey){
+function settingNumber(obj,key,label,suffix,min,max,tipKey,section){
   return h('div',{style:{marginBottom:'8px'}},
     h('div',{style:{fontSize:'10px',color:'var(--tx3)',marginBottom:'3px',display:'flex',alignItems:'center'}},label,tipKey?tip(tipKey):null),
     h('div',{style:{display:'flex',alignItems:'center',gap:'4px'}},
-      h('input',{className:'input',type:'number',min:String(min||0),max:String(max||999999999),style:{width:'100px',padding:'4px 8px',fontSize:'12px'},value:String(obj[key]||0),onChange:function(e){obj[key]=parseInt(e.target.value)||0}}),
+      h('input',{className:'input',type:'number',min:String(min||0),max:String(max||999999999),style:{width:'100px',padding:'4px 8px',fontSize:'12px'},value:String(obj[key]!=null?obj[key]:0),onInput:function(e){var v=parseInt(e.target.value);if(isNaN(v))return;obj[key]=v;_setVpnEdit(section,key,v)}}),
       suffix?h('span',{style:{fontSize:'10px',color:'var(--tx3)'}},suffix):null))
 }
-function settingText(obj,key,label,wide,tipKey){
+function settingText(obj,key,label,wide,tipKey,section){
   return h('div',{style:{marginBottom:'8px',flex:wide?'1':'none'}},
     h('div',{style:{fontSize:'10px',color:'var(--tx3)',marginBottom:'3px',display:'flex',alignItems:'center'}},label,tipKey?tip(tipKey):null),
-    h('input',{className:'input',type:'text',style:{width:wide?'100%':'200px',padding:'4px 8px',fontSize:'12px'},value:String(obj[key]||''),onChange:function(e){obj[key]=e.target.value}}))
+    h('input',{className:'input',type:'text',style:{width:wide?'100%':'200px',padding:'4px 8px',fontSize:'12px'},value:String(obj[key]||''),onInput:function(e){obj[key]=e.target.value;_setVpnEdit(section,key,e.target.value)}}))
 }
 function renderSettings(){
   var s=S.settings;if(!s.vpn_toml&&s.vpn_toml!==''){loadSettings();return h('div',{className:'tab-content'},h('div',{className:'skeleton skel-card'}),h('div',{className:'skeleton skel-card'}))}
@@ -105,17 +115,17 @@ function renderSettings(){
           h('select',{className:'input',style:{padding:'4px 8px',fontSize:'12px'},value:String(vpn.auth_failure_status_code||407),onChange:function(e){vpn.auth_failure_status_code=parseInt(e.target.value);_vpnEdits.auth_failure_status_code=vpn.auth_failure_status_code}},
             h('option',{value:'407'},'407'),h('option',{value:'405'},'405')))),
       h('div',{style:{display:'flex',gap:'16px',flexWrap:'wrap',marginBottom:'14px'}},
-        settingToggle(vpn,'ipv6_available',t('ipv6'),'ipv6_available'),
-        settingToggle(vpn,'allow_private_network_connections',t('allow_private'),'allow_private'),
-        settingToggle(vpn,'speedtest_enable',t('speedtest'),'speedtest'),
-        settingToggle(vpn,'ping_enable',t('ping'),'ping')),
+        settingToggle(vpn,'ipv6_available',t('ipv6'),'ipv6_available',null),
+        settingToggle(vpn,'allow_private_network_connections',t('allow_private'),'allow_private',null),
+        settingToggle(vpn,'speedtest_enable',t('speedtest'),'speedtest',null),
+        settingToggle(vpn,'ping_enable',t('ping'),'ping',null)),
       h('div',{style:{fontSize:'11px',fontWeight:'600',color:'var(--tx2)',marginBottom:'8px'}},'Timeouts'),
       h('div',{className:'grid grid3',style:{gap:'8px'}},
-        settingNumber(vpn,'tls_handshake_timeout_secs',t('timeout_tls'),t('seconds'),1,120,'timeout_tls'),
-        settingNumber(vpn,'client_listener_timeout_secs',t('timeout_listener'),t('seconds'),10,86400,'timeout_listener'),
-        settingNumber(vpn,'connection_establishment_timeout_secs',t('timeout_connect'),t('seconds'),1,300,'timeout_connect'),
-        settingNumber(vpn,'tcp_connections_timeout_secs',t('timeout_tcp'),t('seconds'),60,2592000,'timeout_tcp'),
-        settingNumber(vpn,'udp_connections_timeout_secs',t('timeout_udp'),t('seconds'),10,86400,'timeout_udp'))));
+        settingNumber(vpn,'tls_handshake_timeout_secs',t('timeout_tls'),t('seconds'),1,120,'timeout_tls',null),
+        settingNumber(vpn,'client_listener_timeout_secs',t('timeout_listener'),t('seconds'),10,86400,'timeout_listener',null),
+        settingNumber(vpn,'connection_establishment_timeout_secs',t('timeout_connect'),t('seconds'),1,300,'timeout_connect',null),
+        settingNumber(vpn,'tcp_connections_timeout_secs',t('timeout_tcp'),t('seconds'),60,2592000,'timeout_tcp',null),
+        settingNumber(vpn,'udp_connections_timeout_secs',t('timeout_udp'),t('seconds'),10,86400,'timeout_udp',null))));
     var protoOpen=_settingsExpand.protocol;
     sections.push(h('div',{className:'card'},
       h('div',{className:'card-t',style:{cursor:'pointer'},onClick:function(){_settingsExpand.protocol=!_settingsExpand.protocol;R()}},
@@ -123,22 +133,23 @@ function renderSettings(){
       protoOpen?h('div',{className:'grid grid2',style:{gap:'16px'}},
         h('div',null,
           h('div',{style:{fontSize:'11px',fontWeight:'600',color:'var(--tx2)',marginBottom:'8px'}},t('http2_settings')),
-          settingNumber(http2,'max_concurrent_streams',t('max_streams'),null,1,1000),
-          settingNumber(http2,'max_frame_size',t('frame_size'),null,16384,16777215),
-          settingNumber(http2,'header_table_size',t('header_table'),null,0,65536),
-          settingNumber(http2,'initial_connection_window_size',t('conn_window'),null,65535,2147483647),
-          settingNumber(http2,'initial_stream_window_size',t('stream_window'),null,65535,2147483647)),
+          settingNumber(http2,'max_concurrent_streams',t('max_streams'),null,1,100000,'max_streams','_http2'),
+          settingNumber(http2,'max_frame_size',t('frame_size'),null,16384,16777215,'frame_size','_http2'),
+          settingNumber(http2,'header_table_size',t('header_table'),null,0,1048576,'header_table','_http2'),
+          settingNumber(http2,'initial_connection_window_size',t('conn_window'),null,65535,2147483647,'conn_window','_http2'),
+          settingNumber(http2,'initial_stream_window_size',t('stream_window'),null,65535,2147483647,'stream_window','_http2')),
         h('div',null,
           h('div',{style:{fontSize:'11px',fontWeight:'600',color:'var(--tx2)',marginBottom:'8px'}},t('quic_settings')),
-          settingNumber(quic,'max_concurrent_streams',t('max_streams'),null,1,1000),
-          settingNumber(quic,'max_frame_size',t('frame_size'),null,16384,16777215),
-          settingNumber(quic,'initial_connection_window_size',t('conn_window'),null,65535,2147483647),
-          settingNumber(quic,'initial_stream_window_size',t('stream_window'),null,65535,2147483647))):null));
+          settingNumber(quic,'initial_max_streams_bidi',t('max_streams')+' (bidi)',null,1,100000,'max_streams','_quic'),
+          settingNumber(quic,'initial_max_streams_uni',t('max_streams')+' (uni)',null,1,100000,'max_streams','_quic'),
+          settingNumber(quic,'recv_udp_payload_size','Recv payload',null,1200,65535,null,'_quic'),
+          settingNumber(quic,'send_udp_payload_size','Send payload',null,1200,65535,null,'_quic'),
+          settingNumber(quic,'initial_max_data',t('conn_window'),null,1048576,1073741824,'conn_window','_quic'))):null));
     sections.push(h('div',{className:'card'},
       h('div',{className:'card-t'},t('metrics_settings')),
       h('div',{style:{display:'flex',gap:'12px',flexWrap:'wrap'}},
-        settingText(metrics,'address',t('metrics_addr'),true,'metrics_addr'),
-        settingNumber(metrics,'request_timeout_secs',t('metrics_timeout'),t('seconds'),1,300,'metrics_timeout'))));
+        settingText(metrics,'address',t('metrics_addr'),true,'metrics_addr','_metrics'),
+        settingNumber(metrics,'request_timeout_secs',t('metrics_timeout'),t('seconds'),1,60,'metrics_timeout','_metrics'))));
     sections.push(h('div',{className:'card'},
       h('div',{className:'card-t'},t('routing')),
       h('div',{style:{display:'flex',alignItems:'center',gap:'12px'}},
