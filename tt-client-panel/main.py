@@ -18,6 +18,9 @@ def main():
     signal.signal(signal.SIGINT, shutdown_handler)
     signal.signal(signal.SIGTERM, shutdown_handler)
 
+    from servers import import_existing_configs
+    import_existing_configs()
+
     start_health_thread()
     logger.info("Starting TrustTunnel Client Panel on port %d", PANEL_PORT)
 

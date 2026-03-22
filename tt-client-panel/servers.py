@@ -13,6 +13,126 @@ from config import (
 from auth import load_panel_db, save_panel_db
 
 
+def import_existing_configs():
+    db = load_panel_db()
+    if db.get("servers"):
+        return
+    if not TT_CONFIGS_DIR.exists():
+        return
+    imported = 0
+    active_target = None
+    if TT_ACTIVE_LINK.is_symlink():
+        active_target = TT_ACTIVE_LINK.resolve().name.replace(".toml", "")
+    for toml_file in sorted(TT_CONFIGS_DIR.glob("*.toml")):
+        try:
+            data = _parse_existing_toml(toml_file)
+            if not data.get("hostname"):
+                continue
+            sid = toml_file.stem
+            server = {
+                "id": sid,
+                "name": data.get("hostname", sid),
+                "priority": imported + 1,
+                "enabled": True,
+                "hostname": data.get("hostname", ""),
+                "addresses": data.get("addresses", []),
+                "username": data.get("username", ""),
+                "password": data.get("password", ""),
+                "upstream_protocol": data.get("upstream_protocol", "http2"),
+                "has_ipv6": data.get("has_ipv6", True),
+                "anti_dpi": data.get("anti_dpi", False),
+                "custom_sni": data.get("custom_sni", ""),
+                "added_at": datetime.now().isoformat(timespec="seconds"),
+            }
+            db.setdefault("servers", []).append(server)
+            if active_target and sid == active_target:
+                db["active_server"] = sid
+            imported += 1
+            logger.info("Imported existing config: %s (%s)", sid, data.get("hostname"))
+        except Exception as e:
+            logger.warning("Failed to import %s: %s", toml_file, e)
+    if imported > 0:
+        settings = db.get("settings", {})
+        ep_data = _parse_existing_toml(TT_ACTIVE_LINK.resolve()) if TT_ACTIVE_LINK.is_symlink() else {}
+        if ep_data.get("vpn_mode"):
+            settings["vpn_mode"] = ep_data["vpn_mode"]
+        if "killswitch_enabled" in ep_data:
+            settings["killswitch_enabled"] = ep_data["killswitch_enabled"]
+        if ep_data.get("dns_upstreams"):
+            settings["dns_upstreams"] = ep_data["dns_upstreams"]
+        if ep_data.get("exclusions"):
+            settings["exclusions"] = ep_data["exclusions"]
+        if ep_data.get("mtu_size"):
+            settings["mtu_size"] = ep_data["mtu_size"]
+        db["settings"] = settings
+        save_panel_db(db)
+        logger.info("Imported %d existing server(s), active: %s", imported, db.get("active_server", "none"))
+
+
+def _parse_existing_toml(path):
+    import sys
+    try:
+        if sys.version_info >= (3, 11):
+            import tomllib
+            with open(path, "rb") as f:
+                data = tomllib.load(f)
+        else:
+            raise ImportError
+    except (ImportError, Exception):
+        data = {}
+        current = data
+        for line in path.read_text().splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            if stripped == "[endpoint]":
+                data.setdefault("endpoint", {})
+                current = data["endpoint"]
+                continue
+            if stripped.startswith("[listener"):
+                current = {}
+                continue
+            if stripped.startswith("["):
+                current = {}
+                continue
+            if "=" in stripped:
+                k, v = stripped.split("=", 1)
+                k = k.strip()
+                v = v.strip()
+                if v in ("true", "false"):
+                    current[k] = v == "true"
+                elif v.startswith('"') and v.endswith('"'):
+                    current[k] = v[1:-1]
+                elif v.startswith("[") and v.endswith("]"):
+                    inner = v[1:-1].strip()
+                    if not inner:
+                        current[k] = []
+                    else:
+                        current[k] = [x.strip().strip('"') for x in inner.split(",")]
+                else:
+                    try:
+                        current[k] = int(v)
+                    except ValueError:
+                        current[k] = v
+    ep = data.get("endpoint", {})
+    lt = data.get("listener", {}).get("tun", {})
+    return {
+        "hostname": ep.get("hostname", ""),
+        "addresses": ep.get("addresses", []),
+        "username": ep.get("username", ""),
+        "password": ep.get("password", ""),
+        "upstream_protocol": ep.get("upstream_protocol", "http2"),
+        "has_ipv6": ep.get("has_ipv6", True),
+        "anti_dpi": ep.get("anti_dpi", False),
+        "custom_sni": ep.get("custom_sni", ""),
+        "vpn_mode": data.get("vpn_mode", "general"),
+        "killswitch_enabled": data.get("killswitch_enabled", True),
+        "dns_upstreams": data.get("dns_upstreams", []),
+        "exclusions": data.get("exclusions", []),
+        "mtu_size": lt.get("mtu_size", data.get("mtu_size", 1280)),
+    }
+
+
 def get_servers():
     db = load_panel_db()
     return db.get("servers", [])
