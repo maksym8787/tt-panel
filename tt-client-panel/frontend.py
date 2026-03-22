@@ -417,10 +417,7 @@ function renderAddServer(){
       h('button',{className:'add-tab'+(S.addMode==='manual'?' on':''),onClick:function(){S.addMode='manual';R()}},t('manual'))),
     S.addMode==='deeplink'?h('div',null,
       h('div',{className:'fg'},h('label',{className:'fl'},'Deeplink'),dl=h('input',{className:'input input-m',placeholder:t('paste_deeplink')})),
-      h('div',{className:'grid grid2'},
-        h('div',{className:'fg'},h('label',{className:'fl'},t('username')),un=h('input',{className:'input'})),
-        h('div',{className:'fg'},h('label',{className:'fl'},t('password')),pw=h('input',{className:'input',type:'password'}))),
-      h('button',{className:'btn btn-p',onClick:function(){addServer({deeplink:dl.value,username:un.value,password:pw.value})}},t('add_server'))
+      h('button',{className:'btn btn-p',onClick:function(){addServer({deeplink:dl.value})}},t('add_server'))
     ):h('div',null,
       h('div',{className:'grid grid2'},
         h('div',{className:'fg'},h('label',{className:'fl'},t('name')),nm=h('input',{className:'input'})),
