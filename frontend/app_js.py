@@ -94,7 +94,8 @@ var chartColors={
   cpu:{border:'#06b6d4',bg:'rgba(6,182,212,0.08)'}
 };
 function isDarkMode(){return getComputedStyle(document.documentElement).getPropertyValue('--bg').trim().startsWith('#0')}
-var chartOpts=function(yCallback){var dk=isDarkMode();var gridClr=dk?'rgba(255,255,255,.06)':'rgba(0,0,0,.06)';var tickClr=dk?'rgba(255,255,255,.4)':'rgba(0,0,0,.4)';return{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{display:false},tooltip:{backgroundColor:'#131a24',borderColor:'#1e2a3a',borderWidth:1,titleColor:'#e2e8f0',bodyColor:'#8899aa',titleFont:{family:'DM Sans',size:12,weight:600},bodyFont:{family:'JetBrains Mono',size:11},padding:10,cornerRadius:8,displayColors:true,boxWidth:8,boxHeight:8,boxPadding:4}},scales:{x:{display:true,ticks:{color:tickClr,font:{family:'JetBrains Mono',size:9},maxTicksLimit:8,maxRotation:0},grid:{display:false},border:{display:false}},y:{display:true,ticks:{color:tickClr,font:{family:'JetBrains Mono',size:9},callback:yCallback||undefined,maxTicksLimit:5},grid:{color:gridClr,drawBorder:false},border:{display:false}}}}};
+var chartTheme=function(){var dk=isDarkMode();return{grid:dk?'rgba(255,255,255,.06)':'rgba(0,0,0,.08)',tick:dk?'rgba(255,255,255,.5)':'rgba(0,0,0,.5)',legend:dk?'#c8d0da':'#374151',tipBg:dk?'#131a24':'#ffffff',tipBorder:dk?'#1e2a3a':'#d0d5dd',tipTitle:dk?'#e2e8f0':'#1a1a2e',tipBody:dk?'#8899aa':'#4a5568'}};
+var chartOpts=function(yCallback){var ct=chartTheme();return{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{display:true,labels:{color:ct.legend,font:{family:'DM Sans',size:10},boxWidth:8,boxHeight:8,padding:12,usePointStyle:true}},tooltip:{backgroundColor:ct.tipBg,borderColor:ct.tipBorder,borderWidth:1,titleColor:ct.tipTitle,bodyColor:ct.tipBody,titleFont:{family:'DM Sans',size:12,weight:600},bodyFont:{family:'JetBrains Mono',size:11},padding:10,cornerRadius:8,displayColors:true,boxWidth:8,boxHeight:8,boxPadding:4}},scales:{x:{display:true,ticks:{color:ct.tick,font:{family:'JetBrains Mono',size:9},maxTicksLimit:8,maxRotation:0},grid:{display:false},border:{display:false}},y:{display:true,ticks:{color:ct.tick,font:{family:'JetBrains Mono',size:9},callback:yCallback||undefined,maxTicksLimit:5},grid:{color:ct.grid,drawBorder:false},border:{display:false}}}}};
 var mkDataset=function(label,data,color,fill){return{label:label,data:data,borderColor:color.border,backgroundColor:color.bg,fill:fill!==false,tension:.35,pointRadius:0,pointHoverRadius:4,borderWidth:1.5}};
 
 function updateChart(key,canvas,cfg){
@@ -131,12 +132,12 @@ function drawAllCharts(){
 
   var c3=document.getElementById('ch-resources');
   if(c3){
-    var dk=isDarkMode();var gClr=dk?'rgba(255,255,255,.06)':'rgba(0,0,0,.06)';var tClr=dk?'rgba(255,255,255,.4)':'rgba(0,0,0,.4)';
+    var ct=chartTheme();
     var cpuPct=d.map(function(x,i){if(i===0)return 0;var dt=x.ts-d[i-1].ts;if(dt<=0)return 0;return Math.min(100,((x.cpu-d[i-1].cpu)/dt)*100)});
     updateChart('res',c3,{type:'line',data:{labels:labels,datasets:[
       {label:'Memory MB',data:d.map(function(x){return x.mem/1048576}),borderColor:chartColors.memory.border,backgroundColor:chartColors.memory.bg,fill:true,tension:.35,pointRadius:0,borderWidth:1.5,yAxisID:'y'},
       {label:'CPU %',data:cpuPct,borderColor:chartColors.cpu.border,backgroundColor:'transparent',fill:false,tension:.35,pointRadius:0,borderWidth:1.5,yAxisID:'y1'}
-    ]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{display:true,labels:{color:tClr,font:{family:'DM Sans',size:10},boxWidth:8,boxHeight:8,padding:12,usePointStyle:true}},tooltip:{backgroundColor:'#131a24',borderColor:'#1e2a3a',borderWidth:1,titleColor:'#e2e8f0',bodyColor:'#8899aa',padding:10,cornerRadius:8}},scales:{x:{display:true,ticks:{color:tClr,font:{family:'JetBrains Mono',size:9},maxTicksLimit:8,maxRotation:0},grid:{display:false},border:{display:false}},y:{display:true,position:'left',title:{display:true,text:'Memory MB',color:tClr,font:{size:9}},ticks:{color:tClr,font:{family:'JetBrains Mono',size:9},maxTicksLimit:5},grid:{color:gClr},border:{display:false}},y1:{display:true,position:'right',title:{display:true,text:'CPU %',color:tClr,font:{size:9}},ticks:{color:tClr,font:{family:'JetBrains Mono',size:9},maxTicksLimit:5},grid:{display:false},border:{display:false},min:0}}}})}
+    ]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{display:true,labels:{color:ct.legend,font:{family:'DM Sans',size:10},boxWidth:8,boxHeight:8,padding:12,usePointStyle:true}},tooltip:{backgroundColor:ct.tipBg,borderColor:ct.tipBorder,borderWidth:1,titleColor:ct.tipTitle,bodyColor:ct.tipBody,padding:10,cornerRadius:8}},scales:{x:{display:true,ticks:{color:ct.tick,font:{family:'JetBrains Mono',size:9},maxTicksLimit:8,maxRotation:0},grid:{display:false},border:{display:false}},y:{display:true,position:'left',title:{display:true,text:'Memory MB',color:ct.tick,font:{size:9}},ticks:{color:ct.tick,font:{family:'JetBrains Mono',size:9},maxTicksLimit:5},grid:{color:ct.grid},border:{display:false}},y1:{display:true,position:'right',title:{display:true,text:'CPU %',color:ct.tick,font:{size:9}},ticks:{color:ct.tick,font:{family:'JetBrains Mono',size:9},maxTicksLimit:5},grid:{display:false},border:{display:false},min:0}}}})}
 }
 
 function drawTrafficChart(){
@@ -144,9 +145,9 @@ function drawTrafficChart(){
   if(!S.traffic||!S.traffic.hourly.length)return;
   var d=S.traffic.hourly;var c=document.getElementById('ch-traffic');
   if(c){
-    var dk=isDarkMode();var gClr=dk?'rgba(255,255,255,.06)':'rgba(0,0,0,.06)';var tClr=dk?'rgba(255,255,255,.4)':'rgba(0,0,0,.4)';
+    var ct=chartTheme();
     var labels=d.map(function(x){return ts2t(x.ts)});
-    updateChart('traffic',c,{type:'bar',data:{labels:labels,datasets:[{label:'Download',data:d.map(function(x){return x.out}),backgroundColor:'rgba(34,197,94,0.5)',borderRadius:3},{label:'Upload',data:d.map(function(x){return x['in']}),backgroundColor:'rgba(245,158,11,0.5)',borderRadius:3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,labels:{color:tClr,font:{family:'DM Sans',size:10},boxWidth:8,boxHeight:8,padding:12,usePointStyle:true}},tooltip:{backgroundColor:'#131a24',borderColor:'#1e2a3a',borderWidth:1,titleColor:'#e2e8f0',bodyColor:'#8899aa',padding:10,cornerRadius:8,callbacks:{label:function(ctx){return ctx.dataset.label+': '+fmtTooltip(ctx.raw)}}}},scales:{x:{display:true,ticks:{color:tClr,font:{family:'JetBrains Mono',size:8},maxTicksLimit:24,maxRotation:0},stacked:true,grid:{display:false},border:{display:false}},y:{display:true,ticks:{color:tClr,font:{family:'JetBrains Mono',size:9},callback:function(v){return fmtShort(v)},maxTicksLimit:5},grid:{color:gClr},stacked:true,border:{display:false}}}}})
+    updateChart('traffic',c,{type:'bar',data:{labels:labels,datasets:[{label:'Download',data:d.map(function(x){return x.out}),backgroundColor:'rgba(34,197,94,0.5)',borderRadius:3},{label:'Upload',data:d.map(function(x){return x['in']}),backgroundColor:'rgba(245,158,11,0.5)',borderRadius:3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,labels:{color:ct.legend,font:{family:'DM Sans',size:10},boxWidth:8,boxHeight:8,padding:12,usePointStyle:true}},tooltip:{backgroundColor:ct.tipBg,borderColor:ct.tipBorder,borderWidth:1,titleColor:ct.tipTitle,bodyColor:ct.tipBody,padding:10,cornerRadius:8,callbacks:{label:function(ctx){return ctx.dataset.label+': '+fmtTooltip(ctx.raw)}}}},scales:{x:{display:true,ticks:{color:ct.tick,font:{family:'JetBrains Mono',size:8},maxTicksLimit:24,maxRotation:0},stacked:true,grid:{display:false},border:{display:false}},y:{display:true,ticks:{color:ct.tick,font:{family:'JetBrains Mono',size:9},callback:function(v){return fmtShort(v)},maxTicksLimit:5},grid:{color:ct.grid},stacked:true,border:{display:false}}}}})
   }
 }
 
@@ -155,16 +156,15 @@ function drawConnChart(){
   if(!S.connTimeline||!S.connTimeline.timeline.length)return;
   var d=S.connTimeline.timeline;var c=document.getElementById('ch-conns');
   if(c){
-    var dk=isDarkMode();var gClr=dk?'rgba(255,255,255,.06)':'rgba(0,0,0,.06)';var tClr=dk?'rgba(255,255,255,.4)':'rgba(0,0,0,.4)';
+    var ct=chartTheme();
     var connColor={border:'#a78bfa',bg:'rgba(167,139,250,0.3)'};
     var ipColor={border:'#06b6d4',bg:'rgba(6,182,212,0.3)'};
-    var opts=chartOpts();opts.plugins={...opts.plugins,legend:{display:true,labels:{color:tClr,font:{family:'DM Sans',size:10},boxWidth:8,boxHeight:8,padding:12,usePointStyle:true}}};
     updateChart('conns',c,{type:'bar',data:{
       labels:d.map(function(x){return ts2t(x.ts)}),
       datasets:[
         {label:t('connections'),data:d.map(function(x){return x.connections}),backgroundColor:connColor.bg,borderColor:connColor.border,borderWidth:1,borderRadius:3,order:2},
         {label:t('unique_ips_label'),data:d.map(function(x){return x.unique_ips}),type:'line',borderColor:ipColor.border,backgroundColor:'transparent',borderWidth:2,tension:.35,pointRadius:2,pointBackgroundColor:ipColor.border,order:1,yAxisID:'y1'}
-      ]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:opts.plugins,scales:{x:{display:true,ticks:{color:tClr,font:{family:'JetBrains Mono',size:9},maxTicksLimit:8,maxRotation:0},grid:{display:false},border:{display:false}},y:{display:true,position:'left',title:{display:true,text:t('connections'),color:tClr,font:{size:9}},ticks:{color:tClr,font:{family:'JetBrains Mono',size:9},maxTicksLimit:5},grid:{color:gClr},border:{display:false}},y1:{display:true,position:'right',title:{display:true,text:t('unique_ips_label'),color:tClr,font:{size:9}},ticks:{color:tClr,font:{family:'JetBrains Mono',size:9},maxTicksLimit:5},grid:{display:false},border:{display:false},min:0}}}})
+      ]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{display:true,labels:{color:ct.legend,font:{family:'DM Sans',size:10},boxWidth:8,boxHeight:8,padding:12,usePointStyle:true}},tooltip:{backgroundColor:ct.tipBg,borderColor:ct.tipBorder,borderWidth:1,titleColor:ct.tipTitle,bodyColor:ct.tipBody,padding:10,cornerRadius:8}},scales:{x:{display:true,ticks:{color:ct.tick,font:{family:'JetBrains Mono',size:9},maxTicksLimit:8,maxRotation:0},grid:{display:false},border:{display:false}},y:{display:true,position:'left',title:{display:true,text:t('connections'),color:ct.tick,font:{size:9}},ticks:{color:ct.tick,font:{family:'JetBrains Mono',size:9},maxTicksLimit:5},grid:{color:ct.grid},border:{display:false}},y1:{display:true,position:'right',title:{display:true,text:t('unique_ips_label'),color:ct.tick,font:{size:9}},ticks:{color:ct.tick,font:{family:'JetBrains Mono',size:9},maxTicksLimit:5},grid:{display:false},border:{display:false},min:0}}}})
   }
 }
 
