@@ -28,6 +28,9 @@ TT_DIR="/opt/trusttunnel"
 PANEL_DIR="/opt/trusttunnel-panel"
 PANEL_REPO="https://github.com/maksym8787/tt-panel.git"
 
+log "Setting timezone to Europe/Moscow..."
+timedatectl set-timezone Europe/Moscow
+
 log "Installing dependencies..."
 apt update -qq
 apt install -y -qq python3 python3-venv python3-pip certbot git curl openssl > /dev/null 2>&1
