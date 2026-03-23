@@ -13,6 +13,12 @@ _last_latency = None
 _last_check_ts = 0
 _health_lock = threading.Lock()
 
+_net_history = []
+_NET_HISTORY_MAX = 20160
+_prev_rx = 0
+_prev_tx = 0
+_prev_net_ts = 0
+
 
 def get_health_status():
     with _health_lock:
@@ -38,6 +44,49 @@ def _get_tun_ip():
     except Exception:
         pass
     return None
+
+
+def _read_tun_bytes():
+    try:
+        with open("/proc/net/dev") as f:
+            for line in f:
+                parts = line.strip().split()
+                if parts and parts[0].rstrip(":") == TUN_IF:
+                    rx = int(parts[1])
+                    tx = int(parts[9])
+                    return rx, tx
+    except Exception:
+        pass
+    return 0, 0
+
+
+def _collect_net_stats():
+    global _prev_rx, _prev_tx, _prev_net_ts
+    rx, tx = _read_tun_bytes()
+    now = time.time()
+    if _prev_net_ts > 0 and (now - _prev_net_ts) > 0:
+        dt = now - _prev_net_ts
+        d_rx = max(0, rx - _prev_rx)
+        d_tx = max(0, tx - _prev_tx)
+        entry = {
+            "ts": int(now),
+            "rx_bps": int(d_rx / dt),
+            "tx_bps": int(d_tx / dt),
+            "rx_total": rx,
+            "tx_total": tx,
+        }
+        with _health_lock:
+            _net_history.append(entry)
+            if len(_net_history) > _NET_HISTORY_MAX:
+                del _net_history[:-_NET_HISTORY_MAX]
+    _prev_rx = rx
+    _prev_tx = tx
+    _prev_net_ts = now
+
+
+def get_net_history():
+    with _health_lock:
+        return list(_net_history)
 
 
 def _ping_through_tun():
@@ -119,6 +168,7 @@ def health_loop():
     time.sleep(10)
     while not _shutdown_event.is_set():
         try:
+            _collect_net_stats()
             db = load_panel_db()
             interval = db.get("settings", {}).get("health_check_interval", 30)
             active = get_active_server_id()
