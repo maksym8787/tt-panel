@@ -58,7 +58,11 @@ def write_credentials(clients):
                 "password": c["password"],
                 "created_at": created,
             })
-    CREDS_TOML.write_text("\n".join(lines))
+    if CREDS_TOML.exists():
+        CREDS_TOML.with_suffix(".toml.bak").write_text(CREDS_TOML.read_text())
+    tmp = CREDS_TOML.with_suffix(".tmp")
+    tmp.write_text("\n".join(lines))
+    tmp.replace(CREDS_TOML)
     panel = load_panel_db()
     panel["disabled_users"] = disabled_store
     save_panel_db(panel)

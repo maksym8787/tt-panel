@@ -234,6 +234,10 @@ def save_vpn_structured(settings):
     VPN_TOML.write_text("\n".join(lines))
 
 
+def _esc(s):
+    return str(s).replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n").replace("\r", "\\r")
+
+
 def save_rules_structured(rules):
     RULES_BAK = RULES_TOML.with_suffix(".toml.bak")
     if RULES_TOML.exists():
@@ -243,10 +247,13 @@ def save_rules_structured(rules):
     for r in rules:
         lines.append("[[rule]]")
         if r.get("cidr"):
-            lines.append('cidr = "%s"' % r["cidr"])
+            lines.append('cidr = "%s"' % _esc(r["cidr"]))
         if r.get("client_random_prefix"):
-            lines.append('client_random_prefix = "%s"' % r["client_random_prefix"])
-        lines.append('action = "%s"' % r.get("action", "allow"))
+            lines.append('client_random_prefix = "%s"' % _esc(r["client_random_prefix"]))
+        action = r.get("action", "allow")
+        if action not in ("allow", "deny"):
+            action = "allow"
+        lines.append('action = "%s"' % action)
         lines.append("")
 
     RULES_TOML.write_text("\n".join(lines))
@@ -268,7 +275,7 @@ def _fmt_kv(key, val, schema):
             v = min(mx, v)
         return "%s = %d" % (key, v)
     else:
-        return '%s = "%s"' % (key, str(val).replace('"', '\\"'))
+        return '%s = "%s"' % (key, _esc(str(val)))
 
 
 def get_schema():

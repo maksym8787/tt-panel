@@ -189,6 +189,12 @@ def update_server(server_id, data):
             db["servers"] = servers
             save_panel_db(db)
             _generate_toml(s, db.get("settings", {}))
+            if db.get("active_server") == server_id:
+                try:
+                    subprocess.run(["systemctl", "restart", SERVICE_NAME], timeout=10)
+                    logger.info("Active server config updated, restarted service")
+                except Exception:
+                    pass
             return s
     return None
 
@@ -210,28 +216,23 @@ def delete_server(server_id):
 
 
 def reorder_servers(order):
-    db = load_panel_db()
-    servers = db.get("servers", [])
-    id_map = {s["id"]: s for s in servers}
-    for i, sid in enumerate(order):
-        if sid in id_map:
-            id_map[sid]["priority"] = i + 1
-    db["servers"] = sorted(servers, key=lambda s: s.get("priority", 999))
-    save_panel_db(db)
-    new_primary = db["servers"][0] if db["servers"] else None
-    current_active = db.get("active_server", "")
+    from auth import _panel_lock
+    with _panel_lock:
+        db = load_panel_db()
+        servers = db.get("servers", [])
+        id_map = {s["id"]: s for s in servers}
+        for i, sid in enumerate(order):
+            if sid in id_map:
+                id_map[sid]["priority"] = i + 1
+        db["servers"] = sorted(servers, key=lambda s: s.get("priority", 999))
+        new_primary = db["servers"][0] if db["servers"] else None
+        current_active = db.get("active_server", "")
+        save_panel_db(db)
     if new_primary and new_primary["id"] != current_active and new_primary.get("enabled", True):
         logger.info("Priority changed: activating new primary %s", new_primary["id"])
         result = activate_server(new_primary["id"])
-        if result.get("ok"):
-            db2 = load_panel_db()
-            db2["on_backup"] = False
-            save_panel_db(db2)
-        else:
+        if not result.get("ok"):
             logger.warning("Primary %s failed, trying fallback", new_primary["id"])
-            db2 = load_panel_db()
-            db2["on_backup"] = True
-            save_panel_db(db2)
             for s in db["servers"][1:]:
                 if s.get("enabled", True):
                     activate_server(s["id"])
@@ -271,6 +272,11 @@ def activate_server(server_id, manual=False):
     if manual:
         db["on_backup"] = False
     save_panel_db(db)
+    try:
+        from health import reset_external_ip_cache
+        reset_external_ip_cache()
+    except Exception:
+        pass
 
     settings = db.get("settings", {})
     wait = settings.get("activate_timeout", 10) if manual else settings.get("failover_timeout", 5)
@@ -388,19 +394,28 @@ def parse_deeplink(link):
     return None
 
 
+def _esc(s):
+    return str(s).replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n").replace("\r", "\\r")
+
+
 def _generate_toml(server, settings):
     TT_CONFIGS_DIR.mkdir(parents=True, exist_ok=True)
     toml_path = TT_CONFIGS_DIR / f"{server['id']}.toml"
     vpn_mode = settings.get("vpn_mode", "general")
+    if vpn_mode not in ("general", "selective"):
+        vpn_mode = "general"
     killswitch = settings.get("killswitch_enabled", True)
     dns = settings.get("dns_upstreams", [])
     exclusions = settings.get("exclusions", [])
-    mtu = settings.get("mtu_size", 1280)
+    mtu = max(1200, min(int(settings.get("mtu_size", 1280)), 9000))
 
     addrs = server.get("addresses", [])
-    addr_str = ", ".join(f'"{a}"' for a in addrs)
-    dns_str = ", ".join(f'"{d}"' for d in dns)
-    excl_str = ", ".join(f'"{e}"' for e in exclusions)
+    addr_str = ", ".join(f'"{_esc(a)}"' for a in addrs)
+    dns_str = ", ".join(f'"{_esc(d)}"' for d in dns)
+    excl_str = ", ".join(f'"{_esc(e)}"' for e in exclusions)
+    proto = server.get('upstream_protocol', 'http2')
+    if proto not in ('http2', 'http3'):
+        proto = 'http2'
 
     content = f'''loglevel = "info"
 vpn_mode = "{vpn_mode}"
@@ -411,16 +426,16 @@ exclusions = [{excl_str}]
 dns_upstreams = [{dns_str}]
 
 [endpoint]
-hostname = "{server['hostname']}"
+hostname = "{_esc(server['hostname'])}"
 addresses = [{addr_str}]
-custom_sni = "{server.get('custom_sni', '')}"
+custom_sni = "{_esc(server.get('custom_sni', ''))}"
 has_ipv6 = {"true" if server.get('has_ipv6', True) else "false"}
-username = "{server['username']}"
-password = "{server['password']}"
+username = "{_esc(server['username'])}"
+password = "{_esc(server['password'])}"
 client_random = ""
 skip_verification = false
 certificate = ""
-upstream_protocol = "{server.get('upstream_protocol', 'http2')}"
+upstream_protocol = "{proto}"
 anti_dpi = {"true" if server.get('anti_dpi', False) else "false"}
 
 [listener]
@@ -433,6 +448,7 @@ mtu_size = {mtu}
 change_system_dns = false
 '''
     toml_path.write_text(content)
+    os.chmod(str(toml_path), 0o600)
     logger.info("Generated config: %s", toml_path)
 
 

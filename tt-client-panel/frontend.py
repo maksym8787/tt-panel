@@ -3,7 +3,7 @@ FRONTEND_HTML = r'''<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=5">
-<title>TrustTunnel Client</title>
+<title>TTClient</title>
 <link rel="icon" type="image/png" sizes="64x64" href="/static/favicon.png?v=2">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" crossorigin="anonymous">
 <script src="/static/chart.umd.min.js" defer></script>
@@ -203,7 +203,7 @@ var T={en:{
   password_btn:'Password',cancel:'Cancel',confirm:'Confirm',
   delete_confirm:'Delete this server?',
   move_up:'Up',move_down:'Down',enabled:'Enabled',disabled:'Disabled',
-  no_servers:'No servers added yet',on_backup_server:'Running on backup server. Primary server is available.',switch_to_primary:'Switch to primary',
+  no_servers:'No servers added yet',on_backup_server:'Running on backup server',switch_to_primary:'Switch to primary',
   external_ip:'External IP',service_label:'Service',connection_label:'Connection',
   activate_timeout:'Activation timeout (s)',failover_timeout:'Failover timeout (s)',
   tip_activate_timeout:'How long to wait for tun0 after manual server activation (3-30s). Default: 10',
@@ -215,6 +215,14 @@ var T={en:{
   tip_dns:'DNS servers for resolving through VPN tunnel. Leave empty for system defaults',
   tip_mtu:'Maximum packet size for tunnel interface. Default: 1280. Higher = better throughput but may cause fragmentation',
   tip_exclusions:'Domains and IPs routed differently. In General mode: bypasses VPN. In Selective mode: goes through VPN',
+  tip_deeplink:'Paste a tt:// link from TrustTunnel. All server settings will be extracted automatically',
+  tip_srv_name:'Display name for this server in the panel',
+  tip_srv_hostname:'Server domain name used for TLS verification',
+  tip_srv_address:'Server address and port (host:port). Multiple addresses separated by commas',
+  tip_srv_username:'VPN username for authentication',
+  tip_srv_password:'VPN password for authentication',
+  tip_srv_protocol:'HTTP/2 is more compatible. HTTP/3 (QUIC) can be faster on unstable networks',
+  tip_srv_sni:'Custom SNI for TLS handshake. Leave empty to use hostname',
   theme_dark:'Dark',theme_light:'Light',theme_system:'System',
   prev:'Prev',next:'Next',page:'Page',
   tip_health:'How often to check tunnel status (ping through tun0). Default: 30s',
@@ -252,7 +260,7 @@ var T={en:{
   password_btn:'\u041f\u0430\u0440\u043e\u043b\u044c',cancel:'\u041e\u0442\u043c\u0435\u043d\u0430',confirm:'\u041f\u043e\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u0442\u044c',
   delete_confirm:'\u0423\u0434\u0430\u043b\u0438\u0442\u044c \u044d\u0442\u043e\u0442 \u0441\u0435\u0440\u0432\u0435\u0440?',
   move_up:'\u0412\u0432\u0435\u0440\u0445',move_down:'\u0412\u043d\u0438\u0437',enabled:'\u0412\u043a\u043b.',disabled:'\u0412\u044b\u043a\u043b.',
-  no_servers:'\u0421\u0435\u0440\u0432\u0435\u0440\u044b \u0435\u0449\u0451 \u043d\u0435 \u0434\u043e\u0431\u0430\u0432\u043b\u0435\u043d\u044b',on_backup_server:'\u0420\u0430\u0431\u043e\u0442\u0430 \u043d\u0430 \u0440\u0435\u0437\u0435\u0440\u0432\u043d\u043e\u043c \u0441\u0435\u0440\u0432\u0435\u0440\u0435. \u041e\u0441\u043d\u043e\u0432\u043d\u043e\u0439 \u0434\u043e\u0441\u0442\u0443\u043f\u0435\u043d.',switch_to_primary:'\u041f\u0435\u0440\u0435\u043a\u043b\u044e\u0447\u0438\u0442\u044c\u0441\u044f',
+  no_servers:'\u0421\u0435\u0440\u0432\u0435\u0440\u044b \u0435\u0449\u0451 \u043d\u0435 \u0434\u043e\u0431\u0430\u0432\u043b\u0435\u043d\u044b',on_backup_server:'\u0420\u0430\u0431\u043e\u0442\u0430 \u0447\u0435\u0440\u0435\u0437 \u0440\u0435\u0437\u0435\u0440\u0432\u043d\u044b\u0439 \u0441\u0435\u0440\u0432\u0435\u0440',switch_to_primary:'\u041f\u0435\u0440\u0435\u043a\u043b\u044e\u0447\u0438\u0442\u044c\u0441\u044f',
   external_ip:'\u0412\u043d\u0435\u0448\u043d\u0438\u0439 IP',service_label:'\u0421\u0435\u0440\u0432\u0438\u0441',connection_label:'\u0421\u043e\u0435\u0434\u0438\u043d\u0435\u043d\u0438\u0435',
   activate_timeout:'\u0422\u0430\u0439\u043c\u0430\u0443\u0442 \u0430\u043a\u0442\u0438\u0432\u0430\u0446\u0438\u0438 (\u0441)',failover_timeout:'\u0422\u0430\u0439\u043c\u0430\u0443\u0442 \u043f\u0435\u0440\u0435\u043a\u043b\u044e\u0447\u0435\u043d\u0438\u044f (\u0441)',
   tip_activate_timeout:'\u0421\u043a\u043e\u043b\u044c\u043a\u043e \u0436\u0434\u0430\u0442\u044c tun0 \u043f\u0440\u0438 \u0440\u0443\u0447\u043d\u043e\u0439 \u0430\u043a\u0442\u0438\u0432\u0430\u0446\u0438\u0438 (3-30\u0441). \u041f\u043e \u0443\u043c\u043e\u043b\u0447.: 10',
@@ -264,6 +272,14 @@ var T={en:{
   tip_dns:'DNS \u0441\u0435\u0440\u0432\u0435\u0440\u044b \u0434\u043b\u044f \u0440\u0435\u0437\u043e\u043b\u0432\u0430 \u0447\u0435\u0440\u0435\u0437 \u0442\u0443\u043d\u043d\u0435\u043b\u044c. \u041f\u0443\u0441\u0442\u043e = \u0441\u0438\u0441\u0442\u0435\u043c\u043d\u044b\u0435',
   tip_mtu:'\u041c\u0430\u043a\u0441. \u0440\u0430\u0437\u043c\u0435\u0440 \u043f\u0430\u043a\u0435\u0442\u0430 \u0442\u0443\u043d\u043d\u0435\u043b\u044f. \u041f\u043e \u0443\u043c\u043e\u043b\u0447.: 1280. \u0411\u043e\u043b\u044c\u0448\u0435 = \u0431\u044b\u0441\u0442\u0440\u0435\u0435, \u043d\u043e \u043c\u043e\u0436\u0435\u0442 \u0444\u0440\u0430\u0433\u043c\u0435\u043d\u0442\u0438\u0440\u043e\u0432\u0430\u0442\u044c\u0441\u044f',
   tip_exclusions:'\u0414\u043e\u043c\u0435\u043d\u044b \u0438 IP \u0441 \u043e\u0441\u043e\u0431\u043e\u0439 \u043c\u0430\u0440\u0448\u0440\u0443\u0442\u0438\u0437\u0430\u0446\u0438\u0435\u0439. \u041e\u0431\u0449\u0438\u0439: \u043e\u0431\u0445\u043e\u0434\u044f\u0442 VPN. \u0412\u044b\u0431\u043e\u0440\u043e\u0447\u043d\u044b\u0439: \u0438\u0434\u0443\u0442 \u0447\u0435\u0440\u0435\u0437 VPN',
+  tip_deeplink:'\u0412\u0441\u0442\u0430\u0432\u044c\u0442\u0435 tt:// \u0441\u0441\u044b\u043b\u043a\u0443 \u0438\u0437 TrustTunnel. \u0412\u0441\u0435 \u043d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0438 \u0438\u0437\u0432\u043b\u0435\u043a\u0443\u0442\u0441\u044f \u0430\u0432\u0442\u043e\u043c\u0430\u0442\u0438\u0447\u0435\u0441\u043a\u0438',
+  tip_srv_name:'\u041e\u0442\u043e\u0431\u0440\u0430\u0436\u0430\u0435\u043c\u043e\u0435 \u0438\u043c\u044f \u0441\u0435\u0440\u0432\u0435\u0440\u0430 \u0432 \u043f\u0430\u043d\u0435\u043b\u0438',
+  tip_srv_hostname:'\u0414\u043e\u043c\u0435\u043d\u043d\u043e\u0435 \u0438\u043c\u044f \u0441\u0435\u0440\u0432\u0435\u0440\u0430 \u0434\u043b\u044f TLS \u0432\u0435\u0440\u0438\u0444\u0438\u043a\u0430\u0446\u0438\u0438',
+  tip_srv_address:'\u0410\u0434\u0440\u0435\u0441 \u0438 \u043f\u043e\u0440\u0442 \u0441\u0435\u0440\u0432\u0435\u0440\u0430 (\u0445\u043e\u0441\u0442:\u043f\u043e\u0440\u0442). \u041d\u0435\u0441\u043a\u043e\u043b\u044c\u043a\u043e \u0447\u0435\u0440\u0435\u0437 \u0437\u0430\u043f\u044f\u0442\u0443\u044e',
+  tip_srv_username:'\u041b\u043e\u0433\u0438\u043d VPN \u0434\u043b\u044f \u0430\u0432\u0442\u043e\u0440\u0438\u0437\u0430\u0446\u0438\u0438',
+  tip_srv_password:'\u041f\u0430\u0440\u043e\u043b\u044c VPN \u0434\u043b\u044f \u0430\u0432\u0442\u043e\u0440\u0438\u0437\u0430\u0446\u0438\u0438',
+  tip_srv_protocol:'HTTP/2 \u0441\u043e\u0432\u043c\u0435\u0441\u0442\u0438\u043c\u0435\u0435. HTTP/3 (QUIC) \u0431\u044b\u0441\u0442\u0440\u0435\u0435 \u043d\u0430 \u043d\u0435\u0441\u0442\u0430\u0431\u0438\u043b\u044c\u043d\u044b\u0445 \u0441\u0435\u0442\u044f\u0445',
+  tip_srv_sni:'\u041a\u0430\u0441\u0442\u043e\u043c\u043d\u044b\u0439 SNI \u0434\u043b\u044f TLS. \u041f\u0443\u0441\u0442\u043e = \u0438\u0441\u043f\u043e\u043b\u044c\u0437\u0443\u0435\u0442\u0441\u044f hostname',
   theme_dark:'\u0422\u0451\u043c\u043d\u0430\u044f',theme_light:'\u0421\u0432\u0435\u0442\u043b\u0430\u044f',theme_system:'\u0421\u0438\u0441\u0442\u0435\u043c\u0430',
   prev:'\u041d\u0430\u0437\u0430\u0434',next:'\u0412\u043f\u0435\u0440\u0451\u0434',page:'\u0421\u0442\u0440.',
   tip_health:'\u041a\u0430\u043a \u0447\u0430\u0441\u0442\u043e \u043f\u0440\u043e\u0432\u0435\u0440\u044f\u0442\u044c \u0442\u0443\u043d\u043d\u0435\u043b\u044c (ping \u0447\u0435\u0440\u0435\u0437 tun0). \u041f\u043e \u0443\u043c\u043e\u043b\u0447.: 30\u0441',
@@ -395,15 +411,24 @@ function renderModal(){
         h('button',{className:'btn btn-d',onClick:function(e){if(m.onOk)m.onOk(e.currentTarget)}},t('confirm')),
         h('button',{className:'btn',onClick:close},t('cancel'))));
   }else if(m.t==='edit'){
-    var ni,hi,ui,pi,proto;var s=m.s;
-    content=h('div',{className:'md'},
+    var ni,hi,ai,ui,pi,proti,snii,ipv6i,dpii;var s=m.s;
+    content=h('div',{className:'md',style:{maxWidth:'540px'}},
       h('div',{className:'md-t'},t('edit')+': '+s.name),
-      h('div',{className:'fg'},h('label',{className:'fl'},t('name')),ni=h('input',{className:'input',value:s.name||''})),
-      h('div',{className:'fg'},h('label',{className:'fl'},t('hostname')),hi=h('input',{className:'input input-m',value:s.hostname||''})),
-      h('div',{className:'fg'},h('label',{className:'fl'},t('username')),ui=h('input',{className:'input',value:s.username||''})),
-      h('div',{className:'fg'},h('label',{className:'fl'},t('password')),pi=h('input',{className:'input',type:'password',value:s.password||''})),
+      h('div',{className:'grid grid2',style:{gap:'10px'}},
+        h('div',{className:'fg'},fl(t('name'),'srv_name'),ni=h('input',{className:'input',value:s.name||''})),
+        h('div',{className:'fg'},fl(t('hostname'),'srv_hostname'),hi=h('input',{className:'input input-m',value:s.hostname||''}))),
+      h('div',{className:'fg'},fl(t('address'),'srv_address'),ai=h('input',{className:'input input-m',value:(s.addresses||[]).join(', '),placeholder:'host:443, host2:443'})),
+      h('div',{className:'grid grid2',style:{gap:'10px'}},
+        h('div',{className:'fg'},fl(t('username'),'srv_username'),ui=h('input',{className:'input',value:s.username||''})),
+        h('div',{className:'fg'},fl(t('password'),'srv_password'),pi=h('input',{className:'input',type:'password',value:s.password||''}))),
+      h('div',{className:'grid grid2',style:{gap:'10px'}},
+        h('div',{className:'fg'},fl(t('protocol'),'srv_protocol'),proti=h('select',{className:'input'},h('option',{value:'http2',selected:s.upstream_protocol==='http2'},'HTTP/2'),h('option',{value:'http3',selected:s.upstream_protocol==='http3'},'HTTP/3'))),
+        h('div',{className:'fg'},fl('SNI','srv_sni'),snii=h('input',{className:'input input-m',value:s.custom_sni||'',placeholder:t('hostname')}))),
+      h('div',{style:{display:'flex',gap:'16px',marginBottom:'14px'}},
+        h('label',{style:{display:'flex',alignItems:'center',gap:'6px',fontSize:'12px',cursor:'pointer'}},ipv6i=h('input',{type:'checkbox',checked:s.has_ipv6!==false}),'IPv6'),
+        h('label',{style:{display:'flex',alignItems:'center',gap:'6px',fontSize:'12px',cursor:'pointer'}},dpii=h('input',{type:'checkbox',checked:!!s.anti_dpi}),'Anti-DPI')),
       h('div',{className:'bg'},
-        h('button',{className:'btn btn-p',onClick:function(){editServer(s.id,{name:ni.value,hostname:hi.value,username:ui.value,password:pi.value})}},t('save')),
+        h('button',{className:'btn btn-p',onClick:function(){var addrs=ai.value.trim()?ai.value.split(',').map(function(x){return x.trim()}).filter(Boolean):[hi.value+':443'];editServer(s.id,{name:ni.value,hostname:hi.value,addresses:addrs,username:ui.value,password:pi.value,upstream_protocol:proti.value,custom_sni:snii.value,has_ipv6:ipv6i.checked,anti_dpi:dpii.checked})}},t('save')),
         h('button',{className:'btn',onClick:close},t('cancel'))));
   }else if(m.t==='chgadmin'){
     var ap;
@@ -429,7 +454,8 @@ function renderStatusBar(){
 
 function renderServers(){
   var sorted=S.servers.slice().sort(function(a,b){return(a.priority||0)-(b.priority||0)});
-  var onBackup=S.status&&S.status.on_backup;
+  var onBackup=false;
+  if(S.activeServerId&&sorted.length>1&&sorted[0].enabled&&sorted[0].id!==S.activeServerId)onBackup=true;
   return h('div',null,
     renderStatusBar(),
     onBackup?h('div',{style:{background:'var(--orbg)',border:'1px solid rgba(245,158,11,.25)',borderRadius:'var(--r2)',padding:'10px 16px',marginBottom:'10px',fontSize:'12px',color:'var(--or)',display:'flex',alignItems:'center',gap:'8px'}},
@@ -460,31 +486,37 @@ function moveServer(idx,dir){
   var sorted=S.servers.slice().sort(function(a,b){return(a.priority||0)-(b.priority||0)});
   var ni=idx+dir;if(ni<0||ni>=sorted.length)return;
   var tmp=sorted[idx];sorted[idx]=sorted[ni];sorted[ni]=tmp;
-  reorderServers(sorted.map(function(s){return s.id}));
-  S.servers=sorted.map(function(s,i){s.priority=i;return s});R();
+  S.servers=sorted.map(function(s,i){s.priority=i+1;return s});
+  S.activeServerId=sorted[0].id;
+  R();
+  reorderServers(sorted.map(function(s){return s.id})).then(function(){loadAll()});
 }
 
 function renderAddServer(){
-  var dl,hn,ad,un,pw,nm,proto;
+  var dl,hn,ad,un,pw,nm,proto,sni,ipv6,dpi;
   return h('div',{className:'card'},
     h('div',{className:'card-t'},t('add_server')),
     h('div',{className:'add-tabs'},
       h('button',{className:'add-tab'+(S.addMode==='deeplink'?' on':''),onClick:function(){S.addMode='deeplink';R()}},t('deeplink')),
       h('button',{className:'add-tab'+(S.addMode==='manual'?' on':''),onClick:function(){S.addMode='manual';R()}},t('manual'))),
     S.addMode==='deeplink'?h('div',null,
-      h('div',{className:'fg'},h('label',{className:'fl'},'Deeplink'),dl=h('input',{className:'input input-m',placeholder:t('paste_deeplink')})),
+      h('div',{className:'fg'},fl('Deeplink','deeplink'),dl=h('input',{className:'input input-m',placeholder:t('paste_deeplink')})),
       h('button',{className:'btn btn-p',onClick:function(){addServer({deeplink:dl.value})}},t('add_server'))
     ):h('div',null,
       h('div',{className:'grid grid2'},
-        h('div',{className:'fg'},h('label',{className:'fl'},t('name')),nm=h('input',{className:'input'})),
-        h('div',{className:'fg'},h('label',{className:'fl'},t('hostname')),hn=h('input',{className:'input input-m'}))),
+        h('div',{className:'fg'},fl(t('name'),'srv_name'),nm=h('input',{className:'input'})),
+        h('div',{className:'fg'},fl(t('hostname'),'srv_hostname'),hn=h('input',{className:'input input-m',placeholder:'vpn.example.com'}))),
+      h('div',{className:'fg'},fl(t('address'),'srv_address'),ad=h('input',{className:'input input-m',placeholder:'vpn.example.com:443'})),
       h('div',{className:'grid grid2'},
-        h('div',{className:'fg'},h('label',{className:'fl'},t('address')),ad=h('input',{className:'input input-m'})),
-        h('div',{className:'fg'},h('label',{className:'fl'},t('protocol')),proto=h('select',{className:'input'},h('option',{value:'http2'},'HTTP/2'),h('option',{value:'http3'},'HTTP/3')))),
+        h('div',{className:'fg'},fl(t('username'),'srv_username'),un=h('input',{className:'input'})),
+        h('div',{className:'fg'},fl(t('password'),'srv_password'),pw=h('input',{className:'input',type:'password'}))),
       h('div',{className:'grid grid2'},
-        h('div',{className:'fg'},h('label',{className:'fl'},t('username')),un=h('input',{className:'input'})),
-        h('div',{className:'fg'},h('label',{className:'fl'},t('password')),pw=h('input',{className:'input',type:'password'}))),
-      h('button',{className:'btn btn-p',onClick:function(){addServer({hostname:hn.value,addresses:[ad.value||hn.value+':443'],username:un.value,password:pw.value,name:nm.value,upstream_protocol:proto.value})}},t('add_server'))));
+        h('div',{className:'fg'},fl(t('protocol'),'srv_protocol'),proto=h('select',{className:'input'},h('option',{value:'http2'},'HTTP/2'),h('option',{value:'http3'},'HTTP/3'))),
+        h('div',{className:'fg'},fl('SNI','srv_sni'),sni=h('input',{className:'input input-m',placeholder:t('hostname')}))),
+      h('div',{style:{display:'flex',gap:'16px',marginBottom:'14px'}},
+        h('label',{style:{display:'flex',alignItems:'center',gap:'6px',fontSize:'12px',cursor:'pointer'}},ipv6=h('input',{type:'checkbox',checked:true}),'IPv6'),
+        h('label',{style:{display:'flex',alignItems:'center',gap:'6px',fontSize:'12px',cursor:'pointer'}},dpi=h('input',{type:'checkbox'}),'Anti-DPI')),
+      h('button',{className:'btn btn-p',onClick:function(){addServer({hostname:hn.value,addresses:[ad.value||hn.value+':443'],username:un.value,password:pw.value,name:nm.value||hn.value,upstream_protocol:proto.value,custom_sni:sni.value,has_ipv6:ipv6.checked,anti_dpi:dpi.checked})}},t('add_server'))));
 }
 
 function fmtBps(b){if(!b||b<0)return '0 B/s';if(b>=1073741824)return(b/1073741824).toFixed(1)+' GB/s';if(b>=1048576)return(b/1048576).toFixed(1)+' MB/s';if(b>=1024)return(b/1024).toFixed(0)+' KB/s';return b+' B/s'}

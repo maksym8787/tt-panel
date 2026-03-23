@@ -81,12 +81,12 @@ def hash_password(pw: str, salt: str = None) -> str:
 
 
 def verify_password(pw: str, stored: str) -> bool:
+    import hmac as _hmac
     if '$' in stored:
         salt, expected = stored.split('$', 1)
         h = hashlib.pbkdf2_hmac('sha256', pw.encode(), salt.encode(), iterations=100_000)
-        import hmac as _hmac
-    return _hmac.compare_digest(h.hex(), expected)
-    return hashlib.sha256(pw.encode()).hexdigest() == stored
+        return _hmac.compare_digest(h.hex(), expected)
+    return _hmac.compare_digest(hashlib.sha256(pw.encode()).hexdigest(), stored)
 
 
 def check_rate_limit(ip: str):

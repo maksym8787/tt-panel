@@ -8,6 +8,8 @@ _pending_reload = False
 _reload_timer = None
 _reload_lock = threading.Lock()
 _reload_detail = ""
+_last_reload_ok = True
+RELOAD_DEBOUNCE = 5.0
 RELOAD_DEBOUNCE = 5.0
 
 
@@ -33,11 +35,17 @@ def _do_deferred_reload():
         _pending_reload = False
         detail = _reload_detail
         _reload_detail = ""
+    global _last_reload_ok
     try:
-        subprocess.run(["systemctl", "restart", "trusttunnel"], timeout=10)
-        logger.info("Service restarted (debounced)")
-        _log_restart("config_change", detail)
+        r = subprocess.run(["systemctl", "restart", "trusttunnel"], timeout=10, capture_output=True)
+        _last_reload_ok = r.returncode == 0
+        if _last_reload_ok:
+            logger.info("Service restarted (debounced)")
+            _log_restart("config_change", detail)
+        else:
+            logger.error("Service restart failed: %s", r.stderr.decode()[:200] if r.stderr else "unknown")
     except Exception as e:
+        _last_reload_ok = False
         logger.error("Service restart error: %s", e)
 
 
@@ -74,3 +82,7 @@ def apply_reload_now(reason="manual"):
 
 def is_reload_pending():
     return _pending_reload
+
+
+def last_reload_ok():
+    return _last_reload_ok

@@ -31,6 +31,7 @@ def _do_cert_renewal(domain: str) -> dict:
     from services.reload import _log_restart
     if not shutil.which("certbot"):
         return {"ok": False, "message": "certbot not installed. Run: apt install certbot"}
+    result = {"ok": False, "message": "Unknown error"}
     try:
         subprocess.run(["systemctl", "stop", "trusttunnel"], timeout=10)
         time.sleep(2)
@@ -46,25 +47,23 @@ def _do_cert_renewal(domain: str) -> dict:
                 shutil.copy2(str(le_dir / "fullchain.pem"), str(CERTS_DIR / "cert.pem"))
                 shutil.copy2(str(le_dir / "privkey.pem"), str(CERTS_DIR / "key.pem"))
                 logger.info("Certs copied from %s to %s", le_dir, CERTS_DIR)
-            subprocess.run(["systemctl", "start", "trusttunnel"], timeout=10)
             _log_restart("cert_renewal")
-            return {"ok": True, "message": "Certificate renewed and installed"}
-        subprocess.run(["systemctl", "start", "trusttunnel"], timeout=10)
-        logger.error("Certbot failed (rc=%d): %s", r2.returncode, r2.stderr[:500])
-        return {"ok": False, "message": "Certbot error (rc=" + str(r2.returncode) + "). Is port 80 free? Is domain pointing to this server?"}
+            result = {"ok": True, "message": "Certificate renewed and installed"}
+        else:
+            logger.error("Certbot failed (rc=%d): %s", r2.returncode, r2.stderr[:500])
+            result = {"ok": False, "message": "Certbot error (rc=" + str(r2.returncode) + ")"}
     except FileNotFoundError:
-        try:
-            subprocess.run(["systemctl", "start", "trusttunnel"], timeout=10)
-        except Exception:
-            pass
-        return {"ok": False, "message": "certbot not found in PATH"}
+        result = {"ok": False, "message": "certbot not found in PATH"}
     except Exception as e:
+        logger.error("Certificate renewal error: %s", e)
+        result = {"ok": False, "message": "Renewal failed: " + str(type(e).__name__)}
+    finally:
         try:
             subprocess.run(["systemctl", "start", "trusttunnel"], timeout=10)
-        except Exception:
-            pass
-        logger.error("Certificate renewal error: %s", e)
-        return {"ok": False, "message": "Renewal failed: " + str(type(e).__name__)}
+            logger.info("TrustTunnel restarted after cert renewal")
+        except Exception as e:
+            logger.error("CRITICAL: Failed to restart TrustTunnel after cert renewal: %s", e)
+    return result
 
 
 _last_cert_check = 0

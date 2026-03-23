@@ -19,7 +19,6 @@ async function api(p,o){o=o||{};var r=await fetch(A+p,{headers:{'Content-Type':'
 function toast(m,e){S.toast={m:m,e:!!e};R();setTimeout(function(){S.toast=null;R()},3500)}
 function fmt(b){if(b==null)return '0 B';if(b>=1099511627776)return(b/1099511627776).toFixed(2)+' TB';if(b>=1073741824)return(b/1073741824).toFixed(2)+' GB';if(b>=1048576)return(b/1048576).toFixed(1)+' MB';if(b>=1024)return(b/1024).toFixed(0)+' KB';return b+' B'}
 function fmtShort(b){if(b==null)return '0';if(b>=1099511627776)return(b/1099511627776).toFixed(1)+' TB';if(b>=1073741824)return(b/1073741824).toFixed(1)+' GB';if(b>=1048576)return(b/1048576).toFixed(0)+' MB';if(b>=1024)return(b/1024).toFixed(0)+' KB';return b+' B'}
-function fmtTooltip(b){if(b==null)return '0 B';if(b>=1099511627776)return(b/1099511627776).toFixed(2)+' TB';if(b>=1073741824)return(b/1073741824).toFixed(2)+' GB';if(b>=1048576)return(b/1048576).toFixed(1)+' MB';if(b>=1024)return(b/1024).toFixed(0)+' KB';return b+' B'}
 function ts2t(ts){var d=new Date(ts*1000);var hh=String(d.getHours()).padStart(2,'0')+':00';if(d.getHours()===0)return d.getDate()+'.'+(d.getMonth()+1)+' '+hh;return hh}
 function ts2h(ts){return ts2t(ts)}
 function ts2dt(ts){return new Date(ts*1000).toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}
