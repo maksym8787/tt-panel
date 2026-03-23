@@ -61,7 +61,7 @@ timedatectl set-timezone "$TIMEZONE"
 
 log "Installing dependencies..."
 export DEBIAN_FRONTEND=noninteractive
-export NEEDRESTART_MODE=a
+export NEEDRESTART_SUSPEND=1
 apt update
 apt install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" python3 python3-venv python3-pip certbot git curl openssl
 
