@@ -60,8 +60,8 @@ log "Setting timezone to $TIMEZONE..."
 timedatectl set-timezone "$TIMEZONE"
 
 log "Installing dependencies..."
-apt update -qq
-apt install -y -qq python3 python3-venv python3-pip certbot git curl openssl > /dev/null 2>&1
+apt update
+apt install -y python3 python3-venv python3-pip certbot git curl openssl
 
 log "Creating directories..."
 mkdir -p $TT_DIR/certs $PANEL_DIR
@@ -69,7 +69,7 @@ mkdir -p $TT_DIR/certs $PANEL_DIR
 if [ ! -f "$TT_DIR/trusttunnel_endpoint" ]; then
     log "Downloading TrustTunnel endpoint v${TT_VERSION}..."
     TT_URL="https://github.com/TrustTunnel/TrustTunnel/releases/download/v${TT_VERSION}/trusttunnel-v${TT_VERSION}-linux-x86_64.tar.gz"
-    if curl -fsSL "$TT_URL" -o /tmp/tt-endpoint.tar.gz 2>/dev/null; then
+    if curl -fSL "$TT_URL" -o /tmp/tt-endpoint.tar.gz; then
         tar -xzf /tmp/tt-endpoint.tar.gz -C $TT_DIR
         rm -f /tmp/tt-endpoint.tar.gz
         if [ ! -f "$TT_DIR/trusttunnel_endpoint" ]; then
@@ -98,7 +98,7 @@ elif [ -f "$TT_DIR/certs/cert.pem" ] && [ -f "$TT_DIR/certs/key.pem" ]; then
 else
     log "Obtaining SSL certificate for $DOMAIN..."
     systemctl stop trusttunnel 2>/dev/null || true
-    if certbot certonly --standalone -d "$DOMAIN" --non-interactive --agree-tos --register-unsafely-without-email 2>/dev/null; then
+    if certbot certonly --standalone -d "$DOMAIN" --non-interactive --agree-tos --register-unsafely-without-email; then
         cp "$LE_DIR/fullchain.pem" "$TT_DIR/certs/cert.pem"
         cp "$LE_DIR/privkey.pem" "$TT_DIR/certs/key.pem"
         log "Certificate installed"
@@ -209,7 +209,7 @@ EOF
 log "Installing Admin Panel..."
 cd /tmp
 rm -rf tt-panel-install
-git clone "$PANEL_REPO" tt-panel-install 2>/dev/null || err "Failed to clone panel repo"
+git clone "$PANEL_REPO" tt-panel-install || err "Failed to clone panel repo"
 
 cp tt-panel-install/auth.py $PANEL_DIR/
 cp tt-panel-install/collector.py $PANEL_DIR/
@@ -227,7 +227,7 @@ if [ ! -d "$PANEL_DIR/venv" ]; then
     log "Creating Python venv..."
     python3 -m venv $PANEL_DIR/venv
 fi
-$PANEL_DIR/venv/bin/pip install -q fastapi uvicorn 2>/dev/null
+$PANEL_DIR/venv/bin/pip install fastapi uvicorn
 
 log "Creating panel systemd service..."
 cat > /etc/systemd/system/tt-admin.service << EOF
