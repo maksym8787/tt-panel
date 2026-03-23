@@ -20,8 +20,12 @@ echo -e "${CYAN}║   TrustTunnel + Admin Panel Installer    ║${NC}"
 echo -e "${CYAN}╚══════════════════════════════════════════╝${NC}"
 echo ""
 
-DOMAIN=$(ask "Domain name (e.g. vpn.example.com)")
-if [ -z "$DOMAIN" ]; then err "Domain required"; fi
+DOMAIN="$1"
+if [ -z "$DOMAIN" ]; then
+    echo -en "${CYAN}[?]${NC} Domain name (e.g. vpn.example.com): "
+    read -r DOMAIN < /dev/tty || true
+fi
+if [ -z "$DOMAIN" ]; then err "Usage: bash install.sh <domain>"; fi
 
 TT_VERSION="1.0.17"
 TT_DIR="/opt/trusttunnel"
