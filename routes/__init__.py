@@ -39,6 +39,15 @@ async def index():
     return FRONTEND_HTML
 
 
+@app.get("/favicon.ico")
+async def favicon():
+    from fastapi.responses import FileResponse
+    fav = Path(__file__).parent.parent / "static" / "favicon.png"
+    if fav.exists():
+        return FileResponse(str(fav), media_type="image/png")
+    return Response(status_code=204)
+
+
 import routes.auth_routes  # noqa: E402, F401
 import routes.user_routes  # noqa: E402, F401
 import routes.monitoring_routes  # noqa: E402, F401
