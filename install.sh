@@ -64,13 +64,27 @@ else
     log "TrustTunnel endpoint already exists, skipping download"
 fi
 
-log "Obtaining SSL certificate for $DOMAIN..."
-systemctl stop trusttunnel 2>/dev/null || true
-certbot certonly --standalone -d "$DOMAIN" --non-interactive --agree-tos --register-unsafely-without-email --force-renewal || err "Certbot failed. Is port 80 open? Is $DOMAIN pointing to this server?"
 LE_DIR="/etc/letsencrypt/live/$DOMAIN"
-cp "$LE_DIR/fullchain.pem" "$TT_DIR/certs/cert.pem"
-cp "$LE_DIR/privkey.pem" "$TT_DIR/certs/key.pem"
-log "Certificate installed"
+if [ -f "$LE_DIR/fullchain.pem" ] && [ -f "$LE_DIR/privkey.pem" ]; then
+    log "Existing certificate found, reusing"
+    cp "$LE_DIR/fullchain.pem" "$TT_DIR/certs/cert.pem"
+    cp "$LE_DIR/privkey.pem" "$TT_DIR/certs/key.pem"
+elif [ -f "$TT_DIR/certs/cert.pem" ] && [ -f "$TT_DIR/certs/key.pem" ]; then
+    log "Certificates already in place, skipping"
+else
+    log "Obtaining SSL certificate for $DOMAIN..."
+    systemctl stop trusttunnel 2>/dev/null || true
+    if certbot certonly --standalone -d "$DOMAIN" --non-interactive --agree-tos --register-unsafely-without-email 2>/dev/null; then
+        cp "$LE_DIR/fullchain.pem" "$TT_DIR/certs/cert.pem"
+        cp "$LE_DIR/privkey.pem" "$TT_DIR/certs/key.pem"
+        log "Certificate installed"
+    else
+        warn "Certbot failed. You can add certificates manually later:"
+        warn "  cp /path/to/cert.pem $TT_DIR/certs/cert.pem"
+        warn "  cp /path/to/key.pem $TT_DIR/certs/key.pem"
+    fi
+fi
+log "Certificate ready"
 
 log "Writing TrustTunnel configuration..."
 cat > $TT_DIR/vpn.toml << TOMLEOF
