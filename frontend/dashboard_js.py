@@ -75,7 +75,7 @@ function renderDash(){
         h('button',{className:'btn btn-sm btn-p',onClick:function(){S.modal={t:'add'};R()}},t('quick_add_user')),
         h('button',{className:'btn btn-sm',onClick:function(e){svcAct('restart',e.currentTarget)}},t('restart')),
         h('button',{className:'btn btn-sm',onClick:function(e){svcAct('reload',e.currentTarget)}},t('reload_tls')),
-        h('button',{className:'btn btn-sm btn-d',onClick:function(e){svcAct('stop',e.currentTarget)}},t('stop')),
+        s.service&&s.service.active?h('button',{className:'btn btn-sm btn-d',onClick:function(e){svcAct('stop',e.currentTarget)}},t('stop')):h('button',{className:'btn btn-sm btn-p',onClick:function(e){svcAct('start',e.currentTarget)}},t('start')),
         h('button',{className:'btn btn-sm',onClick:renewCert},t('renew_cert')))),
 
     h('div',{className:'card'},
