@@ -145,11 +145,7 @@ TOMLEOF
 cat > $TT_DIR/rules.toml << 'TOMLEOF'
 TOMLEOF
 
-FIRST_PASS=$(head -c 12 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 10)
-cat > $TT_DIR/credentials.toml << CREDEOF
-[[client]]
-username = "admin"
-password = "$FIRST_PASS"
+cat > $TT_DIR/credentials.toml << 'CREDEOF'
 CREDEOF
 
 log "Creating TrustTunnel systemd service..."
@@ -275,8 +271,6 @@ log "Enabling and starting services..."
 systemctl daemon-reload
 systemctl enable trusttunnel tt-admin
 systemctl restart systemd-journald
-systemctl start trusttunnel
-sleep 2
 systemctl start tt-admin
 
 log "Waiting for panel to start..."
@@ -297,10 +291,9 @@ echo -e "  Panel:      ${CYAN}https://$DOMAIN:8443${NC}"
 echo -e "  TT Status:  $(systemctl is-active trusttunnel 2>/dev/null)"
 echo -e "  Panel:      $(systemctl is-active tt-admin 2>/dev/null)"
 echo ""
-echo -e "  First VPN user: ${CYAN}admin${NC} / ${CYAN}$FIRST_PASS${NC}"
-echo ""
-echo -e "  ${YELLOW}Open the panel URL and create admin password${NC}"
-echo -e "  ${YELLOW}Then manage VPN users through the panel${NC}"
+echo -e "  ${YELLOW}1. Open the panel and create admin password${NC}"
+echo -e "  ${YELLOW}2. Add a VPN user through the panel${NC}"
+echo -e "  ${YELLOW}3. TrustTunnel will start automatically${NC}"
 echo ""
 echo -e "  Deploy updates:  ${CYAN}$PANEL_DIR/deploy.sh${NC}"
 echo ""
