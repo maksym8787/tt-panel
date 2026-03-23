@@ -41,7 +41,7 @@ async function loadAll(){
   R()
 }
 async function loadDash(){await _loadDash();R()}
-async function _loadDash(){try{var p=await Promise.all([api('/status'),api('/users')]);S.status=p[0];S.users=p[1].users}catch(e){toast(e.message,true)}await _loadActiveIps();api('/restart-history').then(function(d){S.restartHistory=d.history}).catch(function(){});api('/user-notes').then(function(d){S.userNotes=d.notes;R()}).catch(function(){});api('/panel-settings').then(function(d){S.panelSettings=d.settings}).catch(function(){})}
+async function _loadDash(){try{var p=await Promise.all([api('/status'),api('/users')]);S.status=p[0];S.users=p[1].users;if(S.status&&S.status.domain)document.title='TTAdmin - '+S.status.domain}catch(e){toast(e.message,true)}await _loadActiveIps();api('/restart-history').then(function(d){S.restartHistory=d.history}).catch(function(){});api('/user-notes').then(function(d){S.userNotes=d.notes;R()}).catch(function(){});api('/panel-settings').then(function(d){S.panelSettings=d.settings}).catch(function(){})}
 async function _loadSummary(){try{S.summary=await api('/monitoring/summary')}catch(e){}}
 async function _loadHistory(h){if(h!=null)S.monPeriod=h;try{S.history=await api('/monitoring/history?hours='+S.monPeriod)}catch(e){toast(e.message,true)}}
 async function _loadConns(h){if(h!=null)S.connPeriod=h;try{S.conns=await api('/monitoring/connections?hours='+S.connPeriod)}catch(e){toast(e.message,true)}}
