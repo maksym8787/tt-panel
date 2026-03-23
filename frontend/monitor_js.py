@@ -61,7 +61,10 @@ function drawTrafficChart(){
   if(c){
     var ct=chartTheme();
     var labels=d.map(function(x){return ts2t(x.ts)});
-    updateChart('traffic',c,{type:'bar',data:{labels:labels,datasets:[{label:t('download'),data:d.map(function(x){return x.out}),backgroundColor:'rgba(34,197,94,0.5)',borderRadius:3},{label:t('upload'),data:d.map(function(x){return x['in']}),backgroundColor:'rgba(245,158,11,0.5)',borderRadius:3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,labels:{color:ct.legend,font:{family:'DM Sans',size:10},boxWidth:8,boxHeight:8,padding:12,usePointStyle:true}},tooltip:{backgroundColor:ct.tipBg,borderColor:ct.tipBorder,borderWidth:1,titleColor:ct.tipTitle,bodyColor:ct.tipBody,padding:10,cornerRadius:8,callbacks:{label:function(ctx){return ctx.dataset.label+': '+fmtTooltip(ctx.raw)}}}},scales:{x:{display:true,ticks:{color:ct.tick,font:{family:'JetBrains Mono',size:8},maxTicksLimit:24,maxRotation:0},stacked:true,grid:{display:false},border:{display:false}},y:{display:true,ticks:{color:ct.tick,font:{family:'JetBrains Mono',size:9},callback:function(v){return fmtShort(v)},maxTicksLimit:5},grid:{color:ct.grid},stacked:true,border:{display:false}}}}})
+    updateChart('traffic',c,{type:'line',data:{labels:labels,datasets:[
+      {label:'\u2193 '+t('download'),data:d.map(function(x){return x.out}),borderColor:'#22c55e',backgroundColor:'rgba(34,197,94,0.1)',borderWidth:2,fill:true,tension:.35,pointRadius:0,pointHoverRadius:4,pointHoverBackgroundColor:'#22c55e'},
+      {label:'\u2191 '+t('upload'),data:d.map(function(x){return x['in']}),borderColor:'#f59e0b',backgroundColor:'rgba(245,158,11,0.08)',borderWidth:2,fill:true,tension:.35,pointRadius:0,pointHoverRadius:4,pointHoverBackgroundColor:'#f59e0b'}
+    ]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{display:true,labels:{color:ct.legend,font:{family:'DM Sans',size:10},boxWidth:8,boxHeight:8,padding:12,usePointStyle:true}},tooltip:{backgroundColor:ct.tipBg,borderColor:ct.tipBorder,borderWidth:1,titleColor:ct.tipTitle,bodyColor:ct.tipBody,padding:10,cornerRadius:8,callbacks:{label:function(ctx){return ctx.dataset.label+': '+fmtTooltip(ctx.raw)}}}},scales:{x:{display:true,ticks:{color:ct.tick,font:{family:'JetBrains Mono',size:8},maxTicksLimit:24,maxRotation:0},grid:{display:false},border:{display:false}},y:{display:true,ticks:{color:ct.tick,font:{family:'JetBrains Mono',size:9},callback:function(v){return fmtShort(v)},maxTicksLimit:5},grid:{color:ct.grid},border:{display:false}}}}})
   }
 }
 
@@ -97,7 +100,7 @@ function renderMonitor(){
       h('div',{className:'chart-wrap'},h('canvas',{id:'ch-sessions'}))),
 
     h('div',{className:'card'},
-      h('div',{className:'card-t'},t('traffic_hourly')),
+      h('div',{className:'card-t'},t('network_traffic')),
       h('div',{className:'chart-wrap'},h('canvas',{id:'ch-traffic'}))),
 
     h('div',{className:'card'},
