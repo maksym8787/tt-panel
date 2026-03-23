@@ -134,13 +134,13 @@ function renderSettings(){
       h('div',{className:'card-t',style:{display:'flex',justifyContent:'space-between',alignItems:'center'}},
         h('span',null,t('rules_settings')),
         h('div',{style:{display:'flex',gap:'6px'}},
-          h('button',{className:'btn btn-xs',onClick:function(){if(!_rulesEdits)_rulesEdits=rules.slice();_rulesEdits.push({cidr:'',client_random:'',action:'deny'});R()}},t('add_rule')),
+          h('button',{className:'btn btn-xs',onClick:function(){if(!_rulesEdits)_rulesEdits=rules.slice();_rulesEdits.push({cidr:'',client_random_prefix:'',action:'deny'});R()}},t('add_rule')),
           h('button',{className:'btn btn-sm btn-p',onClick:function(){var payload=_rulesEdits||rules;api('/settings/rules',{method:'PUT',body:JSON.stringify({rules:payload})}).then(function(){_rulesEdits=null;toast(t('settings_saved'));loadSettings()}).catch(function(er){toast(er.message,true)})}},t('save_rules')))),
       rules.length?h('table',{className:'tbl'},
         h('thead',null,h('tr',null,h('th',null,t('cidr')),h('th',null,'Client Random'),h('th',null,t('action')),h('th',{style:{width:'60px'}},t('delete')))),
         h('tbody',null,rules.map(function(r,i){return h('tr',null,
           h('td',null,h('input',{className:'input',type:'text',style:{width:'100%',padding:'3px 6px',fontSize:'11px'},value:r.cidr||'',onChange:function(e){if(!_rulesEdits)_rulesEdits=rules.slice();_rulesEdits[i]=Object.assign({},_rulesEdits[i],{cidr:e.target.value})}})),
-          h('td',null,h('input',{className:'input',type:'text',style:{width:'100%',padding:'3px 6px',fontSize:'11px'},value:r.client_random||'',onChange:function(e){if(!_rulesEdits)_rulesEdits=rules.slice();_rulesEdits[i]=Object.assign({},_rulesEdits[i],{client_random:e.target.value})}})),
+          h('td',null,h('input',{className:'input',type:'text',style:{width:'100%',padding:'3px 6px',fontSize:'11px'},value:r.client_random_prefix||'',onChange:function(e){if(!_rulesEdits)_rulesEdits=rules.slice();_rulesEdits[i]=Object.assign({},_rulesEdits[i],{client_random_prefix:e.target.value})}})),
           h('td',null,h('select',{className:'input',style:{padding:'3px 6px',fontSize:'11px'},value:r.action||'deny',onChange:function(e){if(!_rulesEdits)_rulesEdits=rules.slice();_rulesEdits[i]=Object.assign({},_rulesEdits[i],{action:e.target.value})}},h('option',{value:'allow'},t('allow')),h('option',{value:'deny'},t('deny')))),
           h('td',null,h('button',{className:'btn btn-xs btn-d',onClick:function(){if(!_rulesEdits)_rulesEdits=rules.slice();_rulesEdits.splice(i,1);R()}},'\u00D7')))}))):
         h('div',{style:{color:'var(--tx3)',fontSize:'12px',padding:'12px 0',textAlign:'center'}},t('no_conn_data'))));
