@@ -136,8 +136,8 @@ function _softUpdateLogin(){
   var lt=document.querySelector('.lt');if(lt)lt.textContent=S.setup?t('initial_setup'):'';
   var btn=document.querySelector('.lc .btn-p');if(btn)btn.textContent=S.setup?t('create_password'):t('sign_in');
   var inp=document.querySelector('.lc input[type=password]');if(inp)inp.placeholder=t('password');
-  document.querySelectorAll('.lg button').forEach(function(b){if(b.textContent==='EN'||b.textContent==='\u0420\u0423'){b.className=b.textContent===(S.lang==='ru'?'\u0420\u0423':'EN')?'on':''}});
-  document.querySelectorAll('.tg button').forEach(function(b){var th=b.title;b.className=''});
+  document.querySelectorAll('.lg button').forEach(function(b,i){b.className=(i===0?S.lang==='en':S.lang==='ru')?'on':''});
+  document.querySelectorAll('.tg button').forEach(function(b,i){b.className=([S.theme==='dark',S.theme==='light',S.theme==='system'][i])?'on':''});
 }
 function renderLogin(){
   var pw;var isS=S.setup;
