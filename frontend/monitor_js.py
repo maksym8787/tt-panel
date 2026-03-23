@@ -54,17 +54,20 @@ function drawAllCharts(){
     ]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{display:true,labels:{color:ct.legend,font:{family:'DM Sans',size:10},boxWidth:8,boxHeight:8,padding:12,usePointStyle:true}},tooltip:{backgroundColor:ct.tipBg,borderColor:ct.tipBorder,borderWidth:1,titleColor:ct.tipTitle,bodyColor:ct.tipBody,padding:10,cornerRadius:8}},scales:{x:{display:true,ticks:{color:ct.tick,font:{family:'JetBrains Mono',size:9},maxTicksLimit:8,maxRotation:0},grid:{display:false},border:{display:false}},y:{display:true,position:'left',title:{display:true,text:t('mem_cpu').split('/')[0].trim()+' MB',color:ct.tick,font:{size:9}},ticks:{color:ct.tick,font:{family:'JetBrains Mono',size:9},maxTicksLimit:5},grid:{color:ct.grid},border:{display:false}},y1:{display:true,position:'right',title:{display:true,text:'CPU %',color:ct.tick,font:{size:9}},ticks:{color:ct.tick,font:{family:'JetBrains Mono',size:9},maxTicksLimit:5},grid:{display:false},border:{display:false},min:0}}}})}
 }
 
+function fmtMbps(v){if(v>=1000)return (v/1000).toFixed(1)+' Gbps';if(v>=1)return v.toFixed(1)+' Mbps';if(v>=0.001)return (v*1000).toFixed(0)+' Kbps';return '0'}
 function drawTrafficChart(){
   if(!window.Chart){setTimeout(drawTrafficChart,500);return}
   if(!S.traffic||!S.traffic.hourly.length)return;
   var d=S.traffic.hourly;var c=document.getElementById('ch-traffic');
+  var interval=3600;
+  if(d.length>=2){var dt=d[1].ts-d[0].ts;if(dt>0)interval=dt}
   if(c){
     var ct=chartTheme();
     var labels=d.map(function(x){return ts2t(x.ts)});
     updateChart('traffic',c,{type:'line',data:{labels:labels,datasets:[
-      {label:'\u2193 '+t('download'),data:d.map(function(x){return x.out}),borderColor:'#22c55e',backgroundColor:'rgba(34,197,94,0.1)',borderWidth:2,fill:true,tension:.35,pointRadius:0,pointHoverRadius:4,pointHoverBackgroundColor:'#22c55e'},
-      {label:'\u2191 '+t('upload'),data:d.map(function(x){return x['in']}),borderColor:'#f59e0b',backgroundColor:'rgba(245,158,11,0.08)',borderWidth:2,fill:true,tension:.35,pointRadius:0,pointHoverRadius:4,pointHoverBackgroundColor:'#f59e0b'}
-    ]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{display:true,labels:{color:ct.legend,font:{family:'DM Sans',size:10},boxWidth:8,boxHeight:8,padding:12,usePointStyle:true}},tooltip:{backgroundColor:ct.tipBg,borderColor:ct.tipBorder,borderWidth:1,titleColor:ct.tipTitle,bodyColor:ct.tipBody,padding:10,cornerRadius:8,callbacks:{label:function(ctx){return ctx.dataset.label+': '+fmtTooltip(ctx.raw)}}}},scales:{x:{display:true,ticks:{color:ct.tick,font:{family:'JetBrains Mono',size:8},maxTicksLimit:24,maxRotation:0},grid:{display:false},border:{display:false}},y:{display:true,ticks:{color:ct.tick,font:{family:'JetBrains Mono',size:9},callback:function(v){return fmtShort(v)},maxTicksLimit:5},grid:{color:ct.grid},border:{display:false}}}}})
+      {label:'\u2193 '+t('download'),data:d.map(function(x){return (x.out||0)*8/interval/1000000}),borderColor:'#22c55e',backgroundColor:'rgba(34,197,94,0.1)',borderWidth:2,fill:true,tension:.35,pointRadius:0,pointHoverRadius:4,pointHoverBackgroundColor:'#22c55e'},
+      {label:'\u2191 '+t('upload'),data:d.map(function(x){return (x['in']||0)*8/interval/1000000}),borderColor:'#f59e0b',backgroundColor:'rgba(245,158,11,0.08)',borderWidth:2,fill:true,tension:.35,pointRadius:0,pointHoverRadius:4,pointHoverBackgroundColor:'#f59e0b'}
+    ]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{display:true,labels:{color:ct.legend,font:{family:'DM Sans',size:10},boxWidth:8,boxHeight:8,padding:12,usePointStyle:true}},tooltip:{backgroundColor:ct.tipBg,borderColor:ct.tipBorder,borderWidth:1,titleColor:ct.tipTitle,bodyColor:ct.tipBody,padding:10,cornerRadius:8,callbacks:{label:function(ctx){return ctx.dataset.label+': '+fmtMbps(ctx.raw)}}}},scales:{x:{display:true,ticks:{color:ct.tick,font:{family:'JetBrains Mono',size:8},maxTicksLimit:24,maxRotation:0},grid:{display:false},border:{display:false}},y:{display:true,ticks:{color:ct.tick,font:{family:'JetBrains Mono',size:9},callback:function(v){return fmtMbps(v)},maxTicksLimit:5},grid:{color:ct.grid},border:{display:false}}}}})
   }
 }
 
