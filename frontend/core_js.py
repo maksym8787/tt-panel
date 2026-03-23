@@ -51,7 +51,7 @@ async function _loadDbSize(){try{S.dbSize=await api('/monitoring/db-size')}catch
 async function _loadActiveIps(){try{var r=await api('/active-ips');S.activeIps=r.active_ips||{}}catch(e){}}
 async function _checkPendingReload(){try{var r=await api('/pending-reload');S.pendingReload=r.pending}catch(e){}}
 async function loadHistory(h){await Promise.all([_loadHistory(h),_loadTraffic(),_loadConnTimeline()]);R(drawMonitorCharts)}
-async function _loadTraffic(d){try{var url=S.tab==='monitor'?'/monitoring/traffic?hours='+S.monPeriod:'/monitoring/traffic?days='+(d||7);S.traffic=await api(url)}catch(e){}}
+async function _loadTraffic(h){try{var hours=h||S.monPeriod||24;S.traffic=await api('/monitoring/traffic?hours='+hours)}catch(e){}}
 async function loadTraffic(d){await _loadTraffic(d);R(drawTrafficChart)}
 async function loadConns(h){await _loadConns(h);R()}
 async function loadOnline(){await _loadOnline();R()}

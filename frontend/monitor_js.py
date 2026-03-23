@@ -96,7 +96,7 @@ function renderMonitor(){
   return h('div',{className:'tab-content'},
     h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'14px'}},
       h('div',{style:{fontSize:'12px',fontWeight:'600',color:'var(--tx2)'}},t('monitoring')),
-      periodSelector(S.monPeriod,periods,function(v){loadHistory(v)})),
+      periodSelector(S.monPeriod,periods,function(v){S.monPeriod=v;S.connPeriod=v;Promise.all([_loadHistory(v),_loadTraffic(v),_loadConnTimeline(),_loadConns(v),_loadOnline()]).then(function(){R(drawMonitorCharts)})})),
 
     h('div',{className:'card'},
       h('div',{className:'card-t'},t('active_sessions')),
@@ -132,19 +132,15 @@ function renderMonitor(){
         h('div',{style:{fontSize:'10px',fontWeight:'600',color:'var(--tx3)',textTransform:'uppercase',letterSpacing:'.05em',marginBottom:'8px'}},t('recently_active')),
         h('div',{style:{display:'flex',flexWrap:'wrap',gap:'6px'}},S.online.recently_active.slice(0,20).map(function(u){var g=u.geo||{};return h('span',{className:'badge b-bl',style:{fontSize:'11px'}},(g.flag?g.flag+' ':'')+u.ip)}))):null),
 
-    expandableCard('conn_log',
-      h('span',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',width:'100%'}},
-        h('span',null,t('connection_log')),
-        periodSelector(S.connPeriod,[{v:1,l:'1h'},{v:6,l:'6h'},{v:24,l:'24h'},{v:168,l:'7d'}],function(v){loadConns(v)})),
+    expandableCard('conn_log',t('connection_log'),
       S.conns&&S.conns.connections&&S.conns.connections.length?h('div',null,
         h('table',{className:'tbl',style:{tableLayout:'fixed',width:'100%'}},
-          h('thead',null,h('tr',null,h('th',{style:{width:'14%'}},t('time')),h('th',{style:{width:'18%'}},t('ip')),h('th',{style:{width:'22%'}},t('user_agent')),h('th',{style:{width:'32%'}},t('destination')),h('th',{style:{width:'14%'}},t('event')))),
+          h('thead',null,h('tr',null,h('th',{style:{width:'16%'}},t('time')),h('th',{style:{width:'20%'}},t('ip')),h('th',{style:{width:'26%'}},t('user_agent')),h('th',{style:{width:'38%'}},t('destination')))),
           h('tbody',null,paginatedList('connlog',S.conns.connections,function(c){return h('tr',null,
               h('td',null,ts2dt(c.ts)),
               h('td',{style:{color:c.ip?'var(--tx)':'',overflow:'hidden',textOverflow:'ellipsis'}},c.ip||''),
               h('td',{style:{overflow:'hidden',textOverflow:'ellipsis'}},c.ua||''),
-              h('td',{style:{overflow:'hidden',textOverflow:'ellipsis'}},c.dst||''),
-              h('td',null,h('span',{className:'badge '+(c.event==='connect'?'b-gn':c.event==='disconnect'?'b-rd':'b-bl')},c.event||'')))},25)))):
+              h('td',{style:{overflow:'hidden',textOverflow:'ellipsis'}},c.dst||''))},25)))):
         h('div',{style:{color:'var(--tx3)',fontSize:'12px',textAlign:'center',padding:'16px'}},t('no_conn_data'))),
 
     S.conns&&S.conns.top_destinations&&S.conns.top_destinations.length?
