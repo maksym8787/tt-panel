@@ -23,7 +23,7 @@ echo ""
 DOMAIN=$(ask "Domain name (e.g. vpn.example.com)")
 if [ -z "$DOMAIN" ]; then err "Domain required"; fi
 
-TT_VERSION="1.0.27"
+TT_VERSION="1.0.17"
 TT_DIR="/opt/trusttunnel"
 PANEL_DIR="/opt/trusttunnel-panel"
 PANEL_REPO="https://github.com/maksym8787/tt-panel.git"
@@ -40,16 +40,19 @@ mkdir -p $TT_DIR/certs $PANEL_DIR
 
 if [ ! -f "$TT_DIR/trusttunnel_endpoint" ]; then
     log "Downloading TrustTunnel endpoint v${TT_VERSION}..."
-    TT_URL="https://github.com/nicholasgasior/trusttunnel/releases/download/v${TT_VERSION}/trusttunnel_endpoint-x86_64-unknown-linux-gnu"
-    if ! curl -fsSL "$TT_URL" -o "$TT_DIR/trusttunnel_endpoint" 2>/dev/null; then
-        warn "Auto-download failed. Trying alternative..."
-        TT_URL="https://github.com/nicholasgasior/trusttunnel/releases/latest/download/trusttunnel_endpoint-x86_64-unknown-linux-gnu"
-        if ! curl -fsSL "$TT_URL" -o "$TT_DIR/trusttunnel_endpoint" 2>/dev/null; then
-            warn "Download failed. Please manually place trusttunnel_endpoint binary at $TT_DIR/trusttunnel_endpoint"
-            warn "Download from: https://github.com/nicholasgasior/trusttunnel/releases"
-            read -p "Press Enter when file is in place..."
-            [ ! -f "$TT_DIR/trusttunnel_endpoint" ] && err "Binary not found"
+    TT_URL="https://github.com/TrustTunnel/TrustTunnel/releases/download/v${TT_VERSION}/trusttunnel-v${TT_VERSION}-linux-x86_64.tar.gz"
+    if curl -fsSL "$TT_URL" -o /tmp/tt-endpoint.tar.gz 2>/dev/null; then
+        tar -xzf /tmp/tt-endpoint.tar.gz -C $TT_DIR
+        rm -f /tmp/tt-endpoint.tar.gz
+        if [ ! -f "$TT_DIR/trusttunnel_endpoint" ]; then
+            mv $TT_DIR/trusttunnel-*/trusttunnel_endpoint $TT_DIR/ 2>/dev/null || find $TT_DIR -name "trusttunnel_endpoint" -exec mv {} $TT_DIR/ \;
+            rm -rf $TT_DIR/trusttunnel-*/
         fi
+    else
+        warn "Download failed. Please manually place trusttunnel_endpoint binary at $TT_DIR/trusttunnel_endpoint"
+        warn "Download from: https://github.com/TrustTunnel/TrustTunnel/releases"
+        read -p "Press Enter when file is in place..."
+        [ ! -f "$TT_DIR/trusttunnel_endpoint" ] && err "Binary not found"
     fi
     chmod +x $TT_DIR/trusttunnel_endpoint
     log "TrustTunnel endpoint installed"
