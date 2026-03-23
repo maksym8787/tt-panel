@@ -98,7 +98,7 @@ async def server_status(request: Request):
 @app.get("/api/monitoring/history")
 async def monitoring_history(request: Request, hours: int = 24):
     await require_auth(request)
-    hours = max(1, min(hours, 720))
+    hours = max(1, min(hours, 8760))
 
     def _query():
         since = int(time.time()) - hours * 3600
@@ -144,7 +144,7 @@ async def monitoring_traffic(request: Request, days: int = 0, hours: int = 0):
 @app.get("/api/monitoring/connections")
 async def monitoring_connections(request: Request, hours: int = 24, limit: int = 200):
     await require_auth(request)
-    hours = max(1, min(hours, 720))
+    hours = max(1, min(hours, 8760))
     limit = max(1, min(limit, 1000))
 
     def _query():
@@ -189,7 +189,7 @@ async def monitoring_connections(request: Request, hours: int = 24, limit: int =
 @app.get("/api/monitoring/conn-timeline")
 async def monitoring_conn_timeline(request: Request, hours: int = 24):
     await require_auth(request)
-    hours = max(1, min(hours, 720))
+    hours = max(1, min(hours, 8760))
 
     def _query():
         since = int(time.time()) - hours * 3600

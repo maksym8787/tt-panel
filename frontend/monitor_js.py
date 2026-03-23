@@ -89,7 +89,7 @@ function drawConnChart(){
 }
 
 function renderMonitor(){
-  var periods=[{v:1,l:'1h'},{v:6,l:'6h'},{v:24,l:'24h'},{v:168,l:'7d'}];
+  var periods=[{v:1,l:'1h'},{v:24,l:'24h'},{v:168,l:'7d'},{v:720,l:'30d'},{v:8760,l:'1y'}];
 
   if(S.monLoading&&!S.history){return h('div',{className:'tab-content'},h('div',{className:'skeleton skel-chart'}),h('div',{className:'skeleton skel-chart'}),h('div',{className:'skeleton skel-chart'}))}
 
