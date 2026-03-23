@@ -1,9 +1,10 @@
+import json
 import subprocess
 import threading
 import time
 from datetime import datetime
 
-from config import TUN_IF, logger, _shutdown_event
+from config import TUN_IF, NET_HISTORY_FILE, SERVICE_NAME, logger, _shutdown_event
 from auth import load_panel_db, save_panel_db
 from servers import get_active_server_id, get_next_failover_server, activate_server, _check_tun_up
 
@@ -13,18 +14,100 @@ _last_latency = None
 _last_check_ts = 0
 _health_lock = threading.Lock()
 
-_net_history = []
-_NET_HISTORY_MAX = 20160
+_net_recent = []
+_net_aggregated = []
+_RECENT_MAX = 120
+_AGGREGATED_MAX = 105120
+_AGG_INTERVAL = 300
 _prev_rx = 0
 _prev_tx = 0
 _prev_net_ts = 0
+_save_counter = 0
+
+
+def _load_net_history():
+    global _net_recent, _net_aggregated
+    try:
+        if NET_HISTORY_FILE.exists():
+            data = json.loads(NET_HISTORY_FILE.read_text())
+            _net_aggregated = data.get("aggregated", [])[-_AGGREGATED_MAX:]
+            cutoff = time.time() - 3600
+            _net_recent = [p for p in data.get("recent", []) if p.get("ts", 0) > cutoff]
+            logger.info("Loaded net history: %d recent, %d aggregated", len(_net_recent), len(_net_aggregated))
+    except Exception as e:
+        logger.warning("Failed to load net history: %s", e)
+
+
+def _save_net_history():
+    try:
+        data = {"recent": _net_recent[-_RECENT_MAX:], "aggregated": _net_aggregated[-_AGGREGATED_MAX:]}
+        tmp = NET_HISTORY_FILE.with_suffix(".tmp")
+        tmp.write_text(json.dumps(data))
+        tmp.replace(NET_HISTORY_FILE)
+    except Exception as e:
+        logger.warning("Failed to save net history: %s", e)
+
+
+_external_ip = None
+_external_ip_ts = 0
+
+def _get_external_ip():
+    global _external_ip, _external_ip_ts
+    now = time.time()
+    if _external_ip and (now - _external_ip_ts) < 300:
+        return _external_ip
+    try:
+        r = subprocess.run(
+            ["curl", "-s", "--max-time", "5", "--interface", TUN_IF, "https://api.ipify.org"],
+            capture_output=True, text=True, timeout=8
+        )
+        if r.returncode == 0 and r.stdout.strip():
+            _external_ip = r.stdout.strip()
+            _external_ip_ts = now
+            return _external_ip
+    except Exception:
+        pass
+    return _external_ip
+
+
+def _get_tt_service_uptime():
+    try:
+        r = subprocess.run(
+            ["systemctl", "show", SERVICE_NAME, "-p", "ActiveState,ActiveEnterTimestampMonotonic"],
+            capture_output=True, text=True, timeout=5
+        )
+        active = False
+        enter_us = 0
+        for line in r.stdout.splitlines():
+            if line.startswith("ActiveState="):
+                active = line.split("=", 1)[1].strip() == "active"
+            elif line.startswith("ActiveEnterTimestampMonotonic="):
+                v = line.split("=", 1)[1].strip()
+                if v.isdigit():
+                    enter_us = int(v)
+        if not active or enter_us == 0:
+            return 0
+        with open("/proc/uptime") as f:
+            now_us = int(float(f.read().split()[0]) * 1_000_000)
+        return max(0, (now_us - enter_us) // 1_000_000)
+    except Exception:
+        pass
+    return 0
 
 
 def get_health_status():
+    tun_up = _check_tun_up()
+    tun_ip = _get_tun_ip()
+    ext_ip = _get_external_ip() if tun_up else None
+    tt_uptime = _get_tt_service_uptime()
     with _health_lock:
+        connected = tun_up and _fail_count < 2 and _last_latency is not None
         return {
-            "tun_up": _check_tun_up(),
-            "tun_ip": _get_tun_ip(),
+            "tun_up": tun_up,
+            "connected": connected,
+            "tun_ip": tun_ip if tun_up else None,
+            "external_ip": ext_ip,
+            "tt_uptime": tt_uptime,
             "latency_ms": _last_latency,
             "fail_count": _fail_count,
             "last_check": _last_check_ts,
@@ -61,32 +144,62 @@ def _read_tun_bytes():
 
 
 def _collect_net_stats():
-    global _prev_rx, _prev_tx, _prev_net_ts
+    global _prev_rx, _prev_tx, _prev_net_ts, _save_counter
     rx, tx = _read_tun_bytes()
     now = time.time()
     if _prev_net_ts > 0 and (now - _prev_net_ts) > 0:
         dt = now - _prev_net_ts
         d_rx = max(0, rx - _prev_rx)
         d_tx = max(0, tx - _prev_tx)
-        entry = {
-            "ts": int(now),
-            "rx_bps": int(d_rx / dt),
-            "tx_bps": int(d_tx / dt),
-            "rx_total": rx,
-            "tx_total": tx,
-        }
+        entry = {"ts": int(now), "rx_bps": int(d_rx / dt), "tx_bps": int(d_tx / dt)}
         with _health_lock:
-            _net_history.append(entry)
-            if len(_net_history) > _NET_HISTORY_MAX:
-                del _net_history[:-_NET_HISTORY_MAX]
+            _net_recent.append(entry)
+            if len(_net_recent) > _RECENT_MAX:
+                del _net_recent[:-_RECENT_MAX]
+            _aggregate_old_points()
     _prev_rx = rx
     _prev_tx = tx
     _prev_net_ts = now
+    _save_counter += 1
+    if _save_counter >= 10:
+        _save_counter = 0
+        with _health_lock:
+            _save_net_history()
+
+
+def _aggregate_old_points():
+    cutoff = time.time() - 3600
+    old = [p for p in _net_recent if p["ts"] < cutoff]
+    if len(old) < 5:
+        return
+    bucket_ts = (old[0]["ts"] // _AGG_INTERVAL) * _AGG_INTERVAL
+    bucket = []
+    for p in old:
+        pt = (p["ts"] // _AGG_INTERVAL) * _AGG_INTERVAL
+        if pt != bucket_ts:
+            if bucket:
+                _net_aggregated.append({
+                    "ts": bucket_ts,
+                    "rx_bps": sum(b["rx_bps"] for b in bucket) // len(bucket),
+                    "tx_bps": sum(b["tx_bps"] for b in bucket) // len(bucket),
+                })
+            bucket = []
+            bucket_ts = pt
+        bucket.append(p)
+    if bucket:
+        _net_aggregated.append({
+            "ts": bucket_ts,
+            "rx_bps": sum(b["rx_bps"] for b in bucket) // len(bucket),
+            "tx_bps": sum(b["tx_bps"] for b in bucket) // len(bucket),
+        })
+    if len(_net_aggregated) > _AGGREGATED_MAX:
+        del _net_aggregated[:-_AGGREGATED_MAX]
+    _net_recent[:] = [p for p in _net_recent if p["ts"] >= cutoff]
 
 
 def get_net_history():
     with _health_lock:
-        return list(_net_history)
+        return _net_aggregated + _net_recent
 
 
 def _ping_through_tun():
@@ -151,10 +264,10 @@ def _try_failover():
         "to": next_id,
         "reason": f"health_check_failed_{_fail_count}x",
     }
-    db = load_panel_db()
     flog = db.get("failover_log", [])
     flog.insert(0, log_entry)
     db["failover_log"] = flog[:200]
+    db["on_backup"] = True
     save_panel_db(db)
 
     with _health_lock:
@@ -164,6 +277,7 @@ def _try_failover():
 
 
 def health_loop():
+    _load_net_history()
     logger.info("Health check loop started")
     time.sleep(10)
     while not _shutdown_event.is_set():

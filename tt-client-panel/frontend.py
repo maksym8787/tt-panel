@@ -92,6 +92,9 @@ input,textarea,select,button{font-family:inherit;font-size:inherit}
 .tab.on{background:var(--sf2);color:var(--tx);box-shadow:var(--shadow)}
 .card{background:var(--sf);border:1px solid var(--bd);border-radius:var(--r);padding:18px;margin-bottom:14px;box-shadow:var(--shadow)}
 .card-t{font-size:12px;font-weight:600;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;color:var(--tx2);text-transform:uppercase;letter-spacing:.05em}
+.periods{display:flex;gap:2px;background:var(--bg);border-radius:7px;padding:2px;border:1px solid var(--bd)}
+.per{padding:4px 10px;border-radius:5px;border:none;background:transparent;color:var(--tx3);cursor:pointer;font-size:10px;font-weight:600;font-family:var(--m);transition:.15s}
+.per:hover{color:var(--tx2)}.per.on{background:var(--sf2);color:var(--ac);box-shadow:0 1px 4px rgba(0,0,0,.3)}
 .grid{display:grid;gap:10px}.grid2{grid-template-columns:1fr 1fr}.grid3{grid-template-columns:1fr 1fr 1fr}
 @media(max-width:640px){.grid2,.grid3{grid-template-columns:1fr}}
 .stat{background:var(--sf);border:1px solid var(--bd);border-radius:var(--r);padding:14px 16px;position:relative;overflow:hidden;transition:border-color .2s}
@@ -200,7 +203,18 @@ var T={en:{
   password_btn:'Password',cancel:'Cancel',confirm:'Confirm',
   delete_confirm:'Delete this server?',
   move_up:'Up',move_down:'Down',enabled:'Enabled',disabled:'Disabled',
-  no_servers:'No servers added yet',
+  no_servers:'No servers added yet',on_backup_server:'Running on backup server. Primary server is available.',switch_to_primary:'Switch to primary',
+  external_ip:'External IP',service_label:'Service',connection_label:'Connection',
+  activate_timeout:'Activation timeout (s)',failover_timeout:'Failover timeout (s)',
+  tip_activate_timeout:'How long to wait for tun0 after manual server activation (3-30s). Default: 10',
+  tip_failover_timeout:'How long to wait for tun0 during auto-failover (3-15s). Shorter = faster switching. Default: 5',
+  tip_health_check:'Interval between connectivity checks in seconds (10-300). Default: 30',
+  tip_auto_failover:'Automatically switch to backup server when primary fails. Threshold = number of consecutive failures before switching',
+  tip_vpn_mode:'General: all traffic through VPN. Selective: only specified destinations through VPN',
+  tip_killswitch:'Block all internet if VPN connection drops. Prevents traffic leaks',
+  tip_dns:'DNS servers for resolving through VPN tunnel. Leave empty for system defaults',
+  tip_mtu:'Maximum packet size for tunnel interface. Default: 1280. Higher = better throughput but may cause fragmentation',
+  tip_exclusions:'Domains and IPs routed differently. In General mode: bypasses VPN. In Selective mode: goes through VPN',
   theme_dark:'Dark',theme_light:'Light',theme_system:'System',
   prev:'Prev',next:'Next',page:'Page',
   tip_health:'How often to check tunnel status (ping through tun0). Default: 30s',
@@ -238,7 +252,18 @@ var T={en:{
   password_btn:'\u041f\u0430\u0440\u043e\u043b\u044c',cancel:'\u041e\u0442\u043c\u0435\u043d\u0430',confirm:'\u041f\u043e\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u0442\u044c',
   delete_confirm:'\u0423\u0434\u0430\u043b\u0438\u0442\u044c \u044d\u0442\u043e\u0442 \u0441\u0435\u0440\u0432\u0435\u0440?',
   move_up:'\u0412\u0432\u0435\u0440\u0445',move_down:'\u0412\u043d\u0438\u0437',enabled:'\u0412\u043a\u043b.',disabled:'\u0412\u044b\u043a\u043b.',
-  no_servers:'\u0421\u0435\u0440\u0432\u0435\u0440\u044b \u0435\u0449\u0451 \u043d\u0435 \u0434\u043e\u0431\u0430\u0432\u043b\u0435\u043d\u044b',
+  no_servers:'\u0421\u0435\u0440\u0432\u0435\u0440\u044b \u0435\u0449\u0451 \u043d\u0435 \u0434\u043e\u0431\u0430\u0432\u043b\u0435\u043d\u044b',on_backup_server:'\u0420\u0430\u0431\u043e\u0442\u0430 \u043d\u0430 \u0440\u0435\u0437\u0435\u0440\u0432\u043d\u043e\u043c \u0441\u0435\u0440\u0432\u0435\u0440\u0435. \u041e\u0441\u043d\u043e\u0432\u043d\u043e\u0439 \u0434\u043e\u0441\u0442\u0443\u043f\u0435\u043d.',switch_to_primary:'\u041f\u0435\u0440\u0435\u043a\u043b\u044e\u0447\u0438\u0442\u044c\u0441\u044f',
+  external_ip:'\u0412\u043d\u0435\u0448\u043d\u0438\u0439 IP',service_label:'\u0421\u0435\u0440\u0432\u0438\u0441',connection_label:'\u0421\u043e\u0435\u0434\u0438\u043d\u0435\u043d\u0438\u0435',
+  activate_timeout:'\u0422\u0430\u0439\u043c\u0430\u0443\u0442 \u0430\u043a\u0442\u0438\u0432\u0430\u0446\u0438\u0438 (\u0441)',failover_timeout:'\u0422\u0430\u0439\u043c\u0430\u0443\u0442 \u043f\u0435\u0440\u0435\u043a\u043b\u044e\u0447\u0435\u043d\u0438\u044f (\u0441)',
+  tip_activate_timeout:'\u0421\u043a\u043e\u043b\u044c\u043a\u043e \u0436\u0434\u0430\u0442\u044c tun0 \u043f\u0440\u0438 \u0440\u0443\u0447\u043d\u043e\u0439 \u0430\u043a\u0442\u0438\u0432\u0430\u0446\u0438\u0438 (3-30\u0441). \u041f\u043e \u0443\u043c\u043e\u043b\u0447.: 10',
+  tip_failover_timeout:'\u0421\u043a\u043e\u043b\u044c\u043a\u043e \u0436\u0434\u0430\u0442\u044c tun0 \u043f\u0440\u0438 \u0430\u0432\u0442\u043e-\u043f\u0435\u0440\u0435\u043a\u043b\u044e\u0447\u0435\u043d\u0438\u0438 (3-15\u0441). \u041c\u0435\u043d\u044c\u0448\u0435 = \u0431\u044b\u0441\u0442\u0440\u0435\u0435. \u041f\u043e \u0443\u043c\u043e\u043b\u0447.: 5',
+  tip_health_check:'\u0418\u043d\u0442\u0435\u0440\u0432\u0430\u043b \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0438 \u0441\u043e\u0435\u0434\u0438\u043d\u0435\u043d\u0438\u044f (10-300\u0441). \u041f\u043e \u0443\u043c\u043e\u043b\u0447.: 30',
+  tip_auto_failover:'\u0410\u0432\u0442\u043e-\u043f\u0435\u0440\u0435\u043a\u043b\u044e\u0447\u0435\u043d\u0438\u0435 \u043d\u0430 \u0440\u0435\u0437\u0435\u0440\u0432 \u043f\u0440\u0438 \u043f\u0430\u0434\u0435\u043d\u0438\u0438. \u041f\u043e\u0440\u043e\u0433 = \u0441\u043a\u043e\u043b\u044c\u043a\u043e \u043e\u0448\u0438\u0431\u043e\u043a \u043f\u043e\u0434\u0440\u044f\u0434',
+  tip_vpn_mode:'\u041e\u0431\u0449\u0438\u0439: \u0432\u0435\u0441\u044c \u0442\u0440\u0430\u0444\u0438\u043a \u0447\u0435\u0440\u0435\u0437 VPN. \u0412\u044b\u0431\u043e\u0440\u043e\u0447\u043d\u044b\u0439: \u0442\u043e\u043b\u044c\u043a\u043e \u0443\u043a\u0430\u0437\u0430\u043d\u043d\u044b\u0435 \u043d\u0430\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u0438\u044f',
+  tip_killswitch:'\u0411\u043b\u043e\u043a\u0438\u0440\u043e\u0432\u0430\u0442\u044c \u0438\u043d\u0442\u0435\u0440\u043d\u0435\u0442 \u043f\u0440\u0438 \u043f\u043e\u0442\u0435\u0440\u0435 VPN. \u041f\u0440\u0435\u0434\u043e\u0442\u0432\u0440\u0430\u0449\u0430\u0435\u0442 \u0443\u0442\u0435\u0447\u043a\u0438',
+  tip_dns:'DNS \u0441\u0435\u0440\u0432\u0435\u0440\u044b \u0434\u043b\u044f \u0440\u0435\u0437\u043e\u043b\u0432\u0430 \u0447\u0435\u0440\u0435\u0437 \u0442\u0443\u043d\u043d\u0435\u043b\u044c. \u041f\u0443\u0441\u0442\u043e = \u0441\u0438\u0441\u0442\u0435\u043c\u043d\u044b\u0435',
+  tip_mtu:'\u041c\u0430\u043a\u0441. \u0440\u0430\u0437\u043c\u0435\u0440 \u043f\u0430\u043a\u0435\u0442\u0430 \u0442\u0443\u043d\u043d\u0435\u043b\u044f. \u041f\u043e \u0443\u043c\u043e\u043b\u0447.: 1280. \u0411\u043e\u043b\u044c\u0448\u0435 = \u0431\u044b\u0441\u0442\u0440\u0435\u0435, \u043d\u043e \u043c\u043e\u0436\u0435\u0442 \u0444\u0440\u0430\u0433\u043c\u0435\u043d\u0442\u0438\u0440\u043e\u0432\u0430\u0442\u044c\u0441\u044f',
+  tip_exclusions:'\u0414\u043e\u043c\u0435\u043d\u044b \u0438 IP \u0441 \u043e\u0441\u043e\u0431\u043e\u0439 \u043c\u0430\u0440\u0448\u0440\u0443\u0442\u0438\u0437\u0430\u0446\u0438\u0435\u0439. \u041e\u0431\u0449\u0438\u0439: \u043e\u0431\u0445\u043e\u0434\u044f\u0442 VPN. \u0412\u044b\u0431\u043e\u0440\u043e\u0447\u043d\u044b\u0439: \u0438\u0434\u0443\u0442 \u0447\u0435\u0440\u0435\u0437 VPN',
   theme_dark:'\u0422\u0451\u043c\u043d\u0430\u044f',theme_light:'\u0421\u0432\u0435\u0442\u043b\u0430\u044f',theme_system:'\u0421\u0438\u0441\u0442\u0435\u043c\u0430',
   prev:'\u041d\u0430\u0437\u0430\u0434',next:'\u0412\u043f\u0435\u0440\u0451\u0434',page:'\u0421\u0442\u0440.',
   tip_health:'\u041a\u0430\u043a \u0447\u0430\u0441\u0442\u043e \u043f\u0440\u043e\u0432\u0435\u0440\u044f\u0442\u044c \u0442\u0443\u043d\u043d\u0435\u043b\u044c (ping \u0447\u0435\u0440\u0435\u0437 tun0). \u041f\u043e \u0443\u043c\u043e\u043b\u0447.: 30\u0441',
@@ -259,8 +284,9 @@ var S={auth:false,setup:false,loading:true,tab:'servers',
   theme:localStorage.getItem('tt_theme')||'system',addMode:'deeplink',flPage:0};
 
 function t(k){return(T[S.lang]||T.en)[k]||T.en[k]||k}
-function setLang(l){S.lang=l;localStorage.setItem('tt_lang',l);R()}
-function setTheme(th){S.theme=th;localStorage.setItem('tt_theme',th);applyTheme();R()}
+function setLang(l){S.lang=l;localStorage.setItem('tt_lang',l);if(!S.auth){_patchLoginText()}else{R()}}
+function setTheme(th){S.theme=th;localStorage.setItem('tt_theme',th);applyTheme();if(!S.auth){_patchLoginText()}else{R()}}
+function _patchLoginText(){var e=document.querySelector('.ls');if(e)e.textContent=S.setup?t('create_admin_pw'):t('enter_admin_pw');var b=document.querySelector('.lc .btn-p');if(b)b.textContent=S.setup?t('create_password'):t('sign_in');var i=document.querySelector('.lc input[type=password]');if(i)i.placeholder=t('password');document.querySelectorAll('.lg button').forEach(function(b,i){b.className=(i===0?S.lang==='en':S.lang==='ru')?'on':''});document.querySelectorAll('.tg button').forEach(function(b,i){b.className=([S.theme==='dark',S.theme==='light',S.theme==='system'][i])?'on':''})}
 function applyTheme(){document.documentElement.setAttribute('data-theme',S.theme)}
 
 async function api(p,o){o=o||{};var r=await fetch(A+p,{headers:{'Content-Type':'application/json'},credentials:'same-origin',...o});var d=await r.json();if(!r.ok)throw new Error(d.detail||r.statusText);return d}
@@ -393,21 +419,25 @@ function renderModal(){
 }
 
 function renderStatusBar(){
-  var st=S.status;var hl=st&&st.health?st.health:{};var ok=hl.tun_up;var srv=st&&st.active_server;
+  var st=S.status;var hl=st&&st.health?st.health:{};var ok=hl.connected;var srv=st&&st.active_server;
   return h('div',{className:'status-bar'},
     h('span',{className:'dot '+(ok?'dot-on':'dot-off')}),
     h('span',{style:{fontWeight:600}},ok?t('connected')+(srv?' \u2014 '+srv.name:''):t('disconnected')),
     hl.latency_ms?h('span',{style:{color:'var(--tx3)',fontSize:'12px',fontFamily:'var(--m)',marginLeft:'auto'}},t('latency')+': '+hl.latency_ms+'ms'):'',
-    hl.tun_ip?h('span',{style:{color:'var(--tx3)',fontSize:'12px',fontFamily:'var(--m)'}},t('tun_ip')+': '+hl.tun_ip):'');
+    hl.external_ip?h('span',{style:{color:'var(--tx3)',fontSize:'12px',fontFamily:'var(--m)'}},t('external_ip')+': '+hl.external_ip):'');
 }
 
 function renderServers(){
   var sorted=S.servers.slice().sort(function(a,b){return(a.priority||0)-(b.priority||0)});
+  var onBackup=S.status&&S.status.on_backup;
   return h('div',null,
     renderStatusBar(),
+    onBackup?h('div',{style:{background:'var(--orbg)',border:'1px solid rgba(245,158,11,.25)',borderRadius:'var(--r2)',padding:'10px 16px',marginBottom:'10px',fontSize:'12px',color:'var(--or)',display:'flex',alignItems:'center',gap:'8px'}},
+      '\u26A0 '+t('on_backup_server'),
+      h('button',{className:'btn btn-xs btn-p',onClick:function(){var pid=sorted[0].id;api('/servers/'+pid+'/activate',{method:'POST'}).then(function(r){toast(r.message||t('activation_ok'));loadAll()}).catch(function(e){toast(e.message,true)})}},t('switch_to_primary'))):null,
     sorted.length===0?h('div',{className:'card',style:{textAlign:'center',padding:'40px',color:'var(--tx3)'}},t('no_servers')):sorted.map(function(s,i){
       var isActive=s.id===S.activeServerId;
-      return h('div',{className:'sc'+(isActive?' sc-active':'')+(s.disabled?' sc-dis':'')},
+      return h('div',{className:'sc'+(isActive?' sc-active':'')+(!s.enabled?' sc-dis':'')},
         h('div',{style:{display:'flex',flexDirection:'column',gap:'2px',marginRight:'10px',alignItems:'center'}},
           h('span',{style:{fontSize:'10px',color:'var(--tx3)',fontFamily:'var(--m)'}},''+(i+1)),
           h('button',{className:'btn btn-xs',disabled:i===0,onClick:function(){moveServer(i,-1)}},'\u25B2'),
@@ -416,8 +446,8 @@ function renderServers(){
           h('div',{style:{display:'flex',alignItems:'center',gap:'8px'}},
             h('span',{className:'sc-name'},s.name||s.hostname),
             isActive?h('span',{className:'badge b-gn'},t('active')):'',
-            s.protocol?h('span',{className:'badge b-bl'},s.protocol):''),
-          h('div',{className:'sc-host'},s.hostname+(s.addresses?' \u2014 '+s.addresses:''))),
+            s.upstream_protocol?h('span',{className:'badge b-bl'},s.upstream_protocol):''),
+          h('div',{className:'sc-host'},s.hostname+(s.addresses&&s.addresses.length?' \u2014 '+(Array.isArray(s.addresses)?s.addresses.join(', '):s.addresses):''))),
         h('div',{className:'sc-acts'},
           !isActive?h('button',{className:'btn btn-sm btn-p',onClick:function(e){activateServer(s.id,e.currentTarget)}},t('activate')):'',
           h('button',{className:'btn btn-sm',onClick:function(){S.modal={t:'edit',s:s};R()}},t('edit')),
@@ -454,7 +484,7 @@ function renderAddServer(){
       h('div',{className:'grid grid2'},
         h('div',{className:'fg'},h('label',{className:'fl'},t('username')),un=h('input',{className:'input'})),
         h('div',{className:'fg'},h('label',{className:'fl'},t('password')),pw=h('input',{className:'input',type:'password'}))),
-      h('button',{className:'btn btn-p',onClick:function(){addServer({hostname:hn.value,addresses:ad.value,username:un.value,password:pw.value,name:nm.value,protocol:proto.value})}},t('add_server'))));
+      h('button',{className:'btn btn-p',onClick:function(){addServer({hostname:hn.value,addresses:[ad.value||hn.value+':443'],username:un.value,password:pw.value,name:nm.value,upstream_protocol:proto.value})}},t('add_server'))));
 }
 
 function fmtBps(b){if(!b||b<0)return '0 B/s';if(b>=1073741824)return(b/1073741824).toFixed(1)+' GB/s';if(b>=1048576)return(b/1048576).toFixed(1)+' MB/s';if(b>=1024)return(b/1024).toFixed(0)+' KB/s';return b+' B/s'}
@@ -477,7 +507,7 @@ function drawNetChart(){
   ]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{display:true,position:'top',labels:{color:tickColor,font:{size:10,family:'DM Sans'},boxWidth:10,padding:8}},tooltip:{callbacks:{label:function(c){return c.dataset.label+': '+fmtBps(c.raw)}}}},scales:{x:{ticks:{color:tickColor,font:{size:9},maxTicksLimit:10},grid:{color:gridColor}},y:{ticks:{color:tickColor,font:{size:9},callback:function(v){return fmtBps(v)}},grid:{color:gridColor},beginAtZero:true}}}})
 }
 function renderMonitor(){
-  var st=S.status;var hl=st&&st.health?st.health:{};var ok=hl.tun_up;var srv=st&&st.active_server;
+  var st=S.status;var hl=st&&st.health?st.health:{};var ok=hl.connected;var srv=st&&st.active_server;
   return h('div',null,
     h('div',{className:'card'},
       h('div',{className:'card-t'},t('monitor')),
@@ -493,11 +523,17 @@ function renderMonitor(){
           h('div',{className:'stat-v'},hl.latency_ms?hl.latency_ms+'ms':'\u2014'))),
       h('div',{className:'grid grid3'},
         h('div',{className:'stat'},
-          h('div',{className:'stat-l'},t('tun_ip')),
-          h('div',{className:'stat-v',style:{fontSize:'14px'}},hl.tun_ip?hl.tun_ip:'\u2014')),
+          h('div',{className:'stat-l'},t('external_ip')),
+          h('div',{className:'stat-v',style:{fontSize:'14px'}},hl.external_ip?hl.external_ip:'\u2014')),
         h('div',{className:'stat'},
           h('div',{className:'stat-l'},t('uptime')),
-          h('div',{className:'stat-v',style:{fontSize:'14px'}},fmtUptime(st?st.uptime_seconds:0))),
+          h('div',{style:{marginTop:'4px'}},
+            h('div',{style:{display:'flex',alignItems:'baseline',gap:'6px',marginBottom:'4px'}},
+              h('span',{style:{fontSize:'10px',color:'var(--tx3)',minWidth:'70px'}},t('service_label')+':'),
+              h('span',{style:{fontSize:'14px',fontWeight:700,fontFamily:'var(--m)'}},fmtUptime(st?st.uptime_seconds:0))),
+            h('div',{style:{display:'flex',alignItems:'baseline',gap:'6px'}},
+              h('span',{style:{fontSize:'10px',color:'var(--tx3)',minWidth:'70px'}},t('connection_label')+':'),
+              h('span',{style:{fontSize:'14px',fontWeight:700,fontFamily:'var(--m)',color:hl.tt_uptime?'var(--gn)':'var(--tx3)'}},hl.tt_uptime?fmtUptime(hl.tt_uptime):'\u2014')))),
         h('div',{className:'stat'},
           h('div',{className:'stat-l'},t('hostname')),
           h('div',{className:'stat-v',style:{fontSize:'14px'}},srv?srv.hostname:'\u2014')))),
@@ -505,7 +541,7 @@ function renderMonitor(){
       h('div',{className:'card-t'},
         h('span',null,t('network_traffic')),
         h('div',{className:'periods'},
-          [{v:1,l:'1h'},{v:6,l:'6h'},{v:24,l:'24h'},{v:168,l:'7d'}].map(function(p){
+          [{v:1,l:'1h'},{v:24,l:'24h'},{v:168,l:'7d'},{v:720,l:'30d'},{v:8760,l:'1y'}].map(function(p){
             return h('button',{className:'per'+(S.netPeriod===p.v?' on':''),onClick:function(){loadNetHistory(p.v).then(function(){drawNetChart();R()})}},p.l)}))),
       h('div',{className:'chart-wrap'},h('canvas',{id:'net-chart'}))),
     h('div',{className:'card'},
@@ -529,7 +565,7 @@ function renderFailoverLog(){
         h('thead',null,h('tr',null,
           h('th',null,t('uptime')),h('th',null,t('from_server')),h('th',null,t('to_server')),h('th',null,t('reason')))),
         h('tbody',null,slice.map(function(e){return h('tr',null,
-          h('td',null,new Date(e.ts*1000).toLocaleString()),
+          h('td',null,typeof e.ts==='string'?e.ts.replace('T',' '):new Date(e.ts*1000).toLocaleString()),
           h('td',null,e.from||'\u2014'),h('td',null,e.to||'\u2014'),h('td',null,e.reason||''))})))),
       pages>1?h('div',{style:{display:'flex',justifyContent:'center',gap:'8px',marginTop:'10px'}},
         h('button',{className:'btn btn-xs',disabled:S.flPage===0,onClick:function(){S.flPage--;R()}},t('prev')),
@@ -541,7 +577,7 @@ function renderSettings(){
   var cfg=S.settings;
   var dnsArr=Array.isArray(cfg.dns_upstreams)?cfg.dns_upstreams:[];
   var exclArr=Array.isArray(cfg.exclusions)?cfg.exclusions:[];
-  var hci,afe,aft,vpm,kse,dnsi,exci,mtui;
+  var hci,afe,aft,vpm,kse,dnsi,exci,mtui,actt,fot;
   return h('div',null,
     h('div',{className:'card'},
       h('div',{className:'card-t'},t('settings')),
@@ -568,11 +604,18 @@ function renderSettings(){
             kse=h('label',{className:'toggle'},h('input',{type:'checkbox',checked:cfg.killswitch_enabled!==false}),h('span',{className:'slider'}))))),
       h('div',{className:'grid grid2'},
         h('div',{className:'fg'},
+          fl(t('activate_timeout'),'activate_timeout'),
+          actt=h('input',{className:'input input-m',type:'number',min:'3',max:'30',value:String(cfg.activate_timeout||10)})),
+        h('div',{className:'fg'},
+          fl(t('failover_timeout'),'failover_timeout'),
+          fot=h('input',{className:'input input-m',type:'number',min:'3',max:'15',value:String(cfg.failover_timeout||5)}))),
+      h('div',{className:'grid grid2'},
+        h('div',{className:'fg'},
           fl(t('dns'),'dns'),
           dnsi=h('input',{className:'input input-m',value:dnsArr.join(', '),placeholder:'8.8.8.8, 1.1.1.1'})),
         h('div',{className:'fg'},
           fl(t('mtu'),'mtu'),
-          mtui=h('input',{className:'input input-m',type:'number',min:'1200',max:'1500',value:String(cfg.mtu_size||1280)}))),
+          mtui=h('input',{className:'input input-m',type:'number',min:'1200',max:'9000',value:String(cfg.mtu_size||1280)}))),
       h('div',{className:'fg'},
         fl(t('exclusions_label'),'exclusions'),
         exci=h('textarea',{className:'input input-m',value:exclArr.join('\n'),placeholder:'example.com\n10.0.0.0/8',style:{minHeight:'80px'}})),
@@ -587,13 +630,15 @@ function renderSettings(){
           killswitch_enabled:kse.querySelector('input').checked,
           dns_upstreams:dnsVal,
           mtu_size:parseInt(mtui.value)||1280,
+          activate_timeout:parseInt(actt.value)||10,
+          failover_timeout:parseInt(fot.value)||5,
           exclusions:exclVal
         })}},t('save'))),
     null);
 }
 
 var _refreshTimer=null;
-function startRefresh(){clearInterval(_refreshTimer);_refreshTimer=setInterval(function(){if(S.auth&&(S.tab==='servers'||S.tab==='monitor')){loadStatus().then(R);if(S.tab==='monitor')loadNetHistory().then(function(){drawNetChart()})}},15000)}
+function startRefresh(){clearInterval(_refreshTimer);_refreshTimer=setInterval(function(){if(S.auth&&(S.tab==='servers'||S.tab==='monitor')){loadStatus().then(function(){var prev=S._prevOnBackup;S._prevOnBackup=S.status&&S.status.on_backup;if(S.status&&S.status.on_backup&&!prev){loadAll()}else{R()}});if(S.tab==='monitor')loadNetHistory().then(function(){drawNetChart()})}},10000)}
 
 document.addEventListener('keydown',function(e){if(e.key==='Escape'&&S.modal){S.modal=null;R()}});
 applyTheme();checkAuth().then(function(){if(S.auth)loadAll()});startRefresh();

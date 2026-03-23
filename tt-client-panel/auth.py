@@ -84,7 +84,8 @@ def verify_password(pw: str, stored: str) -> bool:
     if '$' in stored:
         salt, expected = stored.split('$', 1)
         h = hashlib.pbkdf2_hmac('sha256', pw.encode(), salt.encode(), iterations=100_000)
-        return h.hex() == expected
+        import hmac as _hmac
+    return _hmac.compare_digest(h.hex(), expected)
     return hashlib.sha256(pw.encode()).hexdigest() == stored
 
 
@@ -106,13 +107,24 @@ def check_session(request: Request) -> bool:
     db = load_panel_db()
     token_hash = _hash_token(token)
     session = db.get("sessions", {}).get(token_hash)
+    old_key = None
     if not session:
         session = db.get("sessions", {}).get(token)
-        if not session:
+        if session:
+            old_key = token
+        else:
             return False
     ttl = db.get("settings", {}).get("session_ttl", 86400)
     if time.time() - session.get("created", 0) > ttl:
+        db.get("sessions", {}).pop(token_hash, None)
+        if old_key:
+            db.get("sessions", {}).pop(old_key, None)
+        save_panel_db(db)
         return False
+    if old_key:
+        db.get("sessions", {}).pop(old_key, None)
+        db["sessions"][token_hash] = session
+        save_panel_db(db)
     return True
 
 

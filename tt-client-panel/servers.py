@@ -218,9 +218,27 @@ def reorder_servers(order):
             id_map[sid]["priority"] = i + 1
     db["servers"] = sorted(servers, key=lambda s: s.get("priority", 999))
     save_panel_db(db)
+    new_primary = db["servers"][0] if db["servers"] else None
+    current_active = db.get("active_server", "")
+    if new_primary and new_primary["id"] != current_active and new_primary.get("enabled", True):
+        logger.info("Priority changed: activating new primary %s", new_primary["id"])
+        result = activate_server(new_primary["id"])
+        if result.get("ok"):
+            db2 = load_panel_db()
+            db2["on_backup"] = False
+            save_panel_db(db2)
+        else:
+            logger.warning("Primary %s failed, trying fallback", new_primary["id"])
+            db2 = load_panel_db()
+            db2["on_backup"] = True
+            save_panel_db(db2)
+            for s in db["servers"][1:]:
+                if s.get("enabled", True):
+                    activate_server(s["id"])
+                    break
 
 
-def activate_server(server_id):
+def activate_server(server_id, manual=False):
     db = load_panel_db()
     server = None
     for s in db.get("servers", []):
@@ -250,14 +268,18 @@ def activate_server(server_id):
         return {"ok": False, "error": f"Service restart error: {e}"}
 
     db["active_server"] = server_id
+    if manual:
+        db["on_backup"] = False
     save_panel_db(db)
 
-    for _ in range(15):
+    settings = db.get("settings", {})
+    wait = settings.get("activate_timeout", 10) if manual else settings.get("failover_timeout", 5)
+    for _ in range(wait):
         time.sleep(1)
         if _check_tun_up():
             return {"ok": True, "message": "Connected"}
 
-    return {"ok": True, "message": "Service restarted, waiting for tun0"}
+    return {"ok": not manual, "message": "Service restarted, waiting for tun0"}
 
 
 def get_active_server_id():
@@ -274,34 +296,94 @@ def get_next_failover_server(current_id):
     return None
 
 
+def _parse_deeplink_binary(payload):
+    import base64
+    padding = 4 - (len(payload) % 4)
+    if padding < 4:
+        payload += '=' * padding
+    payload = payload.replace('-', '+').replace('_', '/')
+    try:
+        data = base64.b64decode(payload)
+    except Exception:
+        return None
+
+    TAGS = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b}
+    result = {"hostname": "", "addresses": [], "username": "", "password": "",
+              "has_ipv6": True, "skip_verification": False, "upstream_protocol": "http2",
+              "anti_dpi": False, "custom_sni": ""}
+
+    offset = 0
+    while offset < len(data) - 1:
+        tag = data[offset]
+        if tag not in TAGS:
+            break
+        length = data[offset + 1]
+        offset += 2
+        end_pos = offset + length
+        if end_pos < len(data) and data[end_pos] not in TAGS:
+            for scan in range(offset + 1, min(offset + 1024, len(data))):
+                if data[scan] in TAGS and scan > offset:
+                    length = scan - offset
+                    break
+        if offset + length > len(data):
+            length = len(data) - offset
+        value = data[offset:offset + length]
+        offset += length
+
+        try:
+            txt = value.decode("utf-8")
+        except Exception:
+            txt = ""
+
+        if tag == 0x01:
+            result["hostname"] = txt
+        elif tag == 0x02:
+            result["addresses"].append(txt)
+        elif tag == 0x03:
+            result["custom_sni"] = txt
+        elif tag == 0x04:
+            result["has_ipv6"] = len(value) > 0 and value[0] != 0
+        elif tag == 0x05:
+            result["username"] = txt
+        elif tag == 0x06:
+            result["password"] = txt
+        elif tag == 0x07:
+            result["skip_verification"] = len(value) > 0 and value[0] != 0
+        elif tag == 0x09:
+            if len(value) > 0:
+                result["upstream_protocol"] = "http3" if value[0] == 0x02 else "http2"
+        elif tag == 0x0a:
+            result["anti_dpi"] = len(value) > 0 and value[0] != 0
+
+    if not result["addresses"] and result["hostname"]:
+        result["addresses"] = [result["hostname"] + ":443"]
+    result["name"] = result["hostname"]
+    return result if result["hostname"] else None
+
+
 def parse_deeplink(link):
     link = link.strip()
-    if link.startswith("tt://"):
-        try:
-            result = subprocess.run(
-                [str(TT_CLIENT_BIN), "--parse-deeplink", link],
-                capture_output=True, text=True, timeout=10
-            )
-            if result.returncode == 0 and result.stdout.strip():
-                import json
-                data = json.loads(result.stdout)
-                return data
-        except Exception:
-            pass
+    if not link.startswith("tt://"):
+        return None
 
-    if link.startswith("tt://") or link.startswith("trusttunnel://"):
-        import base64
-        try:
-            parts = link.split("://", 1)[1].split("/")
-            host_port = parts[0] if parts else ""
-            hostname = host_port.split(":")[0]
-            return {
-                "hostname": hostname,
-                "addresses": [host_port if ":" in host_port else host_port + ":443"],
-                "name": hostname,
-            }
-        except Exception:
-            pass
+    payload = link[5:]
+    if payload.startswith("?"):
+        payload = payload[1:]
+
+    result = _parse_deeplink_binary(payload)
+    if result:
+        return result
+
+    try:
+        r = subprocess.run(
+            [str(TT_CLIENT_BIN), "--parse-deeplink", link],
+            capture_output=True, text=True, timeout=10
+        )
+        if r.returncode == 0 and r.stdout.strip():
+            import json
+            return json.loads(r.stdout)
+    except Exception:
+        pass
 
     return None
 

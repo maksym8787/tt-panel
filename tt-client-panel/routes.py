@@ -111,11 +111,13 @@ async def status(request: Request):
             return 0
 
     uptime = await asyncio.to_thread(_uptime)
+    db = await asyncio.to_thread(load_panel_db)
     return {
         "health": health,
         "active_server": active,
         "active_server_id": active_id,
         "uptime_seconds": uptime,
+        "on_backup": db.get("on_backup", False),
     }
 
 
@@ -147,6 +149,15 @@ async def create_server(request: Request):
     return {"ok": True, "server": server}
 
 
+@app.put("/api/servers/reorder")
+async def do_reorder(request: Request):
+    await require_auth(request)
+    body = await request.json()
+    order = body.get("order", [])
+    await asyncio.to_thread(reorder_servers, order)
+    return {"ok": True}
+
+
 @app.put("/api/servers/{server_id}")
 async def edit_server(server_id: str, request: Request):
     await require_auth(request)
@@ -169,24 +180,15 @@ async def remove_server(server_id: str, request: Request):
 @app.post("/api/servers/{server_id}/activate")
 async def do_activate(server_id: str, request: Request):
     await require_auth(request)
-    result = await asyncio.to_thread(activate_server, server_id)
+    result = await asyncio.to_thread(activate_server, server_id, True)
     return result
-
-
-@app.put("/api/servers/reorder")
-async def do_reorder(request: Request):
-    await require_auth(request)
-    body = await request.json()
-    order = body.get("order", [])
-    await asyncio.to_thread(reorder_servers, order)
-    return {"ok": True}
 
 
 @app.get("/api/net-history")
 async def net_history(request: Request, hours: int = 1):
     await require_auth(request)
     import time
-    hours = max(1, min(hours, 168))
+    hours = max(1, min(hours, 8760))
     cutoff = time.time() - hours * 3600
     data = await asyncio.to_thread(get_net_history)
     filtered = [p for p in data if p.get("ts", 0) >= cutoff]
@@ -217,10 +219,26 @@ async def update_settings(request: Request):
     body = await request.json()
     db = await asyncio.to_thread(load_panel_db)
     settings = db.get("settings", {})
-    for key in ["health_check_interval", "auto_failover", "failover_threshold",
-                "killswitch_enabled", "vpn_mode", "dns_upstreams", "exclusions", "mtu_size"]:
-        if key in body:
-            settings[key] = body[key]
+    if "health_check_interval" in body:
+        settings["health_check_interval"] = max(10, min(int(body["health_check_interval"]), 300))
+    if "auto_failover" in body:
+        settings["auto_failover"] = bool(body["auto_failover"])
+    if "failover_threshold" in body:
+        settings["failover_threshold"] = max(1, min(int(body["failover_threshold"]), 10))
+    if "killswitch_enabled" in body:
+        settings["killswitch_enabled"] = bool(body["killswitch_enabled"])
+    if "vpn_mode" in body and body["vpn_mode"] in ("general", "selective"):
+        settings["vpn_mode"] = body["vpn_mode"]
+    if "dns_upstreams" in body and isinstance(body["dns_upstreams"], list):
+        settings["dns_upstreams"] = body["dns_upstreams"]
+    if "exclusions" in body and isinstance(body["exclusions"], list):
+        settings["exclusions"] = body["exclusions"]
+    if "mtu_size" in body:
+        settings["mtu_size"] = max(1200, min(int(body["mtu_size"]), 9000))
+    if "activate_timeout" in body:
+        settings["activate_timeout"] = max(3, min(int(body["activate_timeout"]), 30))
+    if "failover_timeout" in body:
+        settings["failover_timeout"] = max(3, min(int(body["failover_timeout"]), 15))
     db["settings"] = settings
     await asyncio.to_thread(save_panel_db, db)
     return {"ok": True, "settings": settings}
