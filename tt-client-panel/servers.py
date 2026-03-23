@@ -239,8 +239,8 @@ def reorder_servers(order):
                     break
 
 
-def activate_server(server_id, manual=False):
-    db = load_panel_db()
+def activate_server(server_id, manual=False, _db=None):
+    db = _db or load_panel_db()
     server = None
     for s in db.get("servers", []):
         if s["id"] == server_id:

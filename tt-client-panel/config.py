@@ -23,9 +23,21 @@ PANEL_DB = PANEL_DIR / "panel.json"
 NET_HISTORY_FILE = PANEL_DIR / "net_history.json"
 PANEL_PORT = int(os.environ.get("TT_CLIENT_PANEL_PORT", "8443"))
 
-GATEWAY_IF = os.environ.get("TT_GATEWAY_IF", "eth0")
-TUN_IF = os.environ.get("TT_TUN_IF", "tun0")
-LAN_GATEWAY = os.environ.get("TT_LAN_GATEWAY", "10.10.9.1")
-LAN_NETWORK = os.environ.get("TT_LAN_NETWORK", "10.10.0.0/16")
+import re as _re
+
+def _validate_iface(v):
+    if not _re.match(r'^[a-zA-Z0-9_\-\.]+$', v):
+        raise ValueError(f"Invalid interface name: {v}")
+    return v
+
+def _validate_ip_net(v):
+    if not _re.match(r'^[0-9a-fA-F:\.\/]+$', v):
+        raise ValueError(f"Invalid IP/network: {v}")
+    return v
+
+GATEWAY_IF = _validate_iface(os.environ.get("TT_GATEWAY_IF", "eth0"))
+TUN_IF = _validate_iface(os.environ.get("TT_TUN_IF", "tun0"))
+LAN_GATEWAY = _validate_ip_net(os.environ.get("TT_LAN_GATEWAY", "10.10.9.1"))
+LAN_NETWORK = _validate_ip_net(os.environ.get("TT_LAN_NETWORK", "10.10.0.0/16"))
 
 _shutdown_event = threading.Event()

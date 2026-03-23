@@ -276,10 +276,13 @@ async def control_service(action: str, request: Request):
 async def change_password(request: Request):
     await require_auth(request)
     body = await request.json()
+    current = body.get("current_password", "")
     pw = body.get("password", "")
     if len(pw) < 6:
         raise HTTPException(400, "Min 6 chars")
     db = await asyncio.to_thread(load_panel_db)
+    if current and not verify_password(current, db.get("admin_password_hash", "")):
+        raise HTTPException(401, "Current password is wrong")
     db["admin_password_hash"] = hash_password(pw)
     db["sessions"] = {}
     await asyncio.to_thread(save_panel_db, db)

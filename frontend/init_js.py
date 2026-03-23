@@ -94,10 +94,10 @@ setInterval(function(){if(S.auth&&S.panelSettings&&S.panelSettings.session_ttl){
 applyTheme();
 checkAuth();
 // (#12) Auto-refresh pause when tab hidden
-var _refreshDash,_refreshMon;
+var _refreshDash,_refreshMon,_refreshing=false;
 function startRefreshTimers(){
-  _refreshDash=setInterval(async function(){if(S.auth&&S.tab==='dashboard'){await Promise.all([_loadDash(),_loadSummary(),_checkPendingReload()]);R()}},30000);
-  _refreshMon=setInterval(async function(){if(S.auth&&S.tab==='monitor'){await Promise.all([_loadHistory(),_loadTraffic(),_loadConnTimeline(),_loadOnline(),_loadConns()]);R(function(){drawMonitorCharts();_updateMonitorNonChart()})}},60000);
+  _refreshDash=setInterval(async function(){if(_refreshing||!S.auth||S.tab!=='dashboard')return;_refreshing=true;try{await Promise.all([_loadDash(),_loadSummary(),_checkPendingReload()]);R()}finally{_refreshing=false}},30000);
+  _refreshMon=setInterval(async function(){if(_refreshing||!S.auth||S.tab!=='monitor')return;_refreshing=true;try{await Promise.all([_loadHistory(),_loadTraffic(),_loadConnTimeline(),_loadOnline(),_loadConns()]);R(function(){drawMonitorCharts();_updateMonitorNonChart()})}finally{_refreshing=false}},60000);
 }
 function stopRefreshTimers(){if(_refreshDash){clearInterval(_refreshDash);_refreshDash=null}if(_refreshMon){clearInterval(_refreshMon);_refreshMon=null}}
 startRefreshTimers();

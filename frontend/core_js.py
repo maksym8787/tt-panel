@@ -119,6 +119,7 @@ var _rTimer=null;var _rCallbacks=[];
 function R(cb){if(cb)_rCallbacks.push(cb);if(_rTimer)return;_rTimer=requestAnimationFrame(function(){_rTimer=null;_doRender();var cbs=_rCallbacks.slice();_rCallbacks=[];for(var i=0;i<cbs.length;i++)cbs[i]()})}
 function _doRender(){
   var root=document.getElementById('root');
+  var scrollY=window.scrollY;
   try{
   var frag=document.createDocumentFragment();
   if(S.toast)frag.appendChild(h('div',{className:'toast '+(S.toast.e?'toast-err':'toast-ok')},S.toast.m));
@@ -127,6 +128,7 @@ function _doRender(){
   if(!S.auth){frag.appendChild(renderLogin());root.replaceChildren(frag);return}
   frag.appendChild(renderApp());
   root.replaceChildren(frag);
+  window.scrollTo(0,scrollY);
   }catch(err){var msg=String(err.message||err).replace(/\x3c/g,'&lt;');root.innerHTML='\x3cdiv style="color:#ef4444;padding:40px;font-family:monospace;font-size:13px"\x3e\x3cb\x3eRender error:\x3c/b\x3e\x3cbr\x3e\x3cpre\x3e'+msg+'\x3c/pre\x3e\x3c/div\x3e';console.error('R() error:',err)}
 }
 

@@ -135,12 +135,14 @@ async def export_users(request: Request):
     clients = await asyncio.to_thread(parse_credentials)
     db = await asyncio.to_thread(load_panel_db)
     notes = db.get("user_notes", {})
-    lines = ["username,password,enabled,created_at,note"]
+    import csv, io
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["username", "password", "enabled", "created_at", "note"])
     for c in clients:
-        note = notes.get(c["username"], "").replace('"', '""')
-        lines.append(f'"{c["username"]}","{c["password"]}",{c.get("enabled", True)},"{c.get("created_at", "")}","{note}"')
+        writer.writerow([c["username"], c["password"], c.get("enabled", True), c.get("created_at", ""), notes.get(c["username"], "")])
     return Response(
-        content="\n".join(lines),
+        content=output.getvalue(),
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=users.csv"}
     )
@@ -153,38 +155,28 @@ async def import_users(request: Request):
     csv_data = body.get("csv", "")
     if not csv_data:
         raise HTTPException(400, "CSV data required")
-    lines = csv_data.strip().split("\n")
-    if len(lines) < 2:
+    import csv, io
+    reader = csv.reader(io.StringIO(csv_data.strip()))
+    rows = list(reader)
+    if len(rows) < 2:
         raise HTTPException(400, "No data rows")
     clients = await asyncio.to_thread(parse_credentials)
     existing = {c["username"] for c in clients}
     db = await asyncio.to_thread(load_panel_db)
     notes = db.get("user_notes", {})
     added = 0
-    for line in lines[1:]:
-        parts = []
-        in_quote = False
-        current = ""
-        for ch in line:
-            if ch == '"':
-                in_quote = not in_quote
-            elif ch == ',' and not in_quote:
-                parts.append(current.strip())
-                current = ""
-            else:
-                current += ch
-        parts.append(current.strip())
+    for parts in rows[1:]:
         if len(parts) < 2:
             continue
-        username = parts[0].strip('"')
-        password = parts[1].strip('"')
+        username = parts[0].strip()
+        password = parts[1].strip()
         if not username or not re.match(r'^[a-zA-Z0-9_\-]{1,64}$', username):
             continue
         if username in existing:
             continue
         enabled = parts[2].strip().lower() != "false" if len(parts) > 2 else True
-        created = parts[3].strip('"') if len(parts) > 3 else datetime.now().isoformat(timespec="seconds")
-        note = parts[4].strip('"') if len(parts) > 4 else ""
+        created = parts[3].strip() if len(parts) > 3 else datetime.now().isoformat(timespec="seconds")
+        note = parts[4].strip() if len(parts) > 4 else ""
         clients.append({"username": username, "password": password or generate_password(),
                         "enabled": enabled, "created_at": created or datetime.now().isoformat(timespec="seconds")})
         existing.add(username)
