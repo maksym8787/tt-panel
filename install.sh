@@ -20,20 +20,44 @@ echo -e "${CYAN}║   TrustTunnel + Admin Panel Installer    ║${NC}"
 echo -e "${CYAN}╚══════════════════════════════════════════╝${NC}"
 echo ""
 
-DOMAIN="$1"
+DOMAIN="${1:-}"
+TIMEZONE="${2:-}"
+
 if [ -z "$DOMAIN" ]; then
     echo -en "${CYAN}[?]${NC} Domain name (e.g. vpn.example.com): "
     read -r DOMAIN < /dev/tty || true
 fi
-if [ -z "$DOMAIN" ]; then err "Usage: bash install.sh <domain>"; fi
+if [ -z "$DOMAIN" ]; then err "Usage: bash install.sh <domain> [timezone]"; fi
+
+if [ -z "$TIMEZONE" ]; then
+    echo ""
+    echo -e "  ${CYAN}Timezones:${NC}"
+    echo -e "  1) Europe/Moscow"
+    echo -e "  2) Europe/Kiev"
+    echo -e "  3) Europe/Berlin"
+    echo -e "  4) UTC"
+    echo -e "  5) Other (enter manually)"
+    echo -en "${CYAN}[?]${NC} Select timezone [1]: "
+    read -r TZ_CHOICE < /dev/tty || true
+    case "${TZ_CHOICE:-1}" in
+        1) TIMEZONE="Europe/Moscow" ;;
+        2) TIMEZONE="Europe/Kiev" ;;
+        3) TIMEZONE="Europe/Berlin" ;;
+        4) TIMEZONE="UTC" ;;
+        5) echo -en "${CYAN}[?]${NC} Enter timezone (e.g. America/New_York): "
+           read -r TIMEZONE < /dev/tty || true ;;
+        *) TIMEZONE="Europe/Moscow" ;;
+    esac
+fi
+if [ -z "$TIMEZONE" ]; then TIMEZONE="Europe/Moscow"; fi
 
 TT_VERSION="1.0.17"
 TT_DIR="/opt/trusttunnel"
 PANEL_DIR="/opt/trusttunnel-panel"
 PANEL_REPO="https://github.com/maksym8787/tt-panel.git"
 
-log "Setting timezone to Europe/Moscow..."
-timedatectl set-timezone Europe/Moscow
+log "Setting timezone to $TIMEZONE..."
+timedatectl set-timezone "$TIMEZONE"
 
 log "Installing dependencies..."
 apt update -qq
