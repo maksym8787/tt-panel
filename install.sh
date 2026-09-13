@@ -62,6 +62,15 @@ TT_DIR="/opt/trusttunnel"
 PANEL_DIR="/opt/trusttunnel-panel"
 PANEL_REPO="https://github.com/maksym8787/tt-panel.git"
 
+# The panel is not exposed on a port of its own: many networks drop everything
+# but 443, and an open admin port is an invitation besides. Instead the endpoint
+# proxies 443 to the panel on loopback, under a secret path. Everything outside
+# that path answers like a dull JSON API (see frontend/__init__.py).
+PANEL_PORT="${TT_PANEL_PORT:-2053}"
+PANEL_PATH="${TT_PANEL_PATH:-/proxybee}"
+PANEL_PATH="/$(echo "$PANEL_PATH" | sed 's#^/*##; s#/*$##')"
+if [ "$PANEL_PATH" = "/" ]; then err "TT_PANEL_PATH must be a non-empty path, e.g. /proxybee"; fi
+
 log "Setting timezone to $TIMEZONE..."
 timedatectl set-timezone "$TIMEZONE"
 
@@ -189,6 +198,13 @@ speedtest_path = "/speedtest"
 ping_enable = false
 ping_path = "/ping"
 auth_failure_status_code = 407
+
+# Anything on 443 that is not VPN traffic goes to the admin panel on loopback.
+# The prefix is not stripped, so the panel is told about it via TT_PANEL_PATH
+# and serves the decoy JSON for every other path.
+[reverse_proxy]
+server_address = "127.0.0.1:$PANEL_PORT"
+path_mask = "/"
 
 [forward_protocol]
 [forward_protocol.direct]
@@ -344,8 +360,13 @@ ExecStart=$PANEL_DIR/venv/bin/python3 main.py
 Restart=always
 RestartSec=3
 Environment=PYTHONUNBUFFERED=1
-# Uncomment when running behind a TLS-terminating reverse proxy:
-# Environment=TT_BEHIND_PROXY=1
+# Loopback only: the endpoint's [reverse_proxy] terminates TLS on 443 and is the
+# panel's only way in, so the panel itself speaks plain HTTP and needs no cert.
+Environment=TT_PANEL_HOST=127.0.0.1
+Environment=TT_PANEL_PORT=$PANEL_PORT
+Environment=TT_PANEL_TLS=off
+Environment=TT_BEHIND_PROXY=1
+Environment=TT_PANEL_PATH=$PANEL_PATH
 # Disable third-party geolocation of client IPs:
 # Environment=TT_GEO_LOOKUP=0
 
@@ -438,14 +459,28 @@ systemctl restart systemd-journald
 systemctl start tt-admin
 
 log "Waiting for panel to start..."
-PANEL_URL="https://127.0.0.1:8443"
-if [ "$CERT_OK" != "1" ]; then PANEL_URL="http://127.0.0.1:8443"; fi
+PANEL_URL="http://127.0.0.1:${PANEL_PORT}${PANEL_PATH}"
+PANEL_UP=0
 for i in $(seq 1 30); do
     if curl -sk "${PANEL_URL}/api/auth-status" >/dev/null 2>&1; then
+        PANEL_UP=1
         break
     fi
     sleep 2
 done
+
+# The panel is only useful if 443 actually reaches it, so prove the whole path
+# end to end rather than trusting that the services came up.
+PROXY_OK=0
+if [ "$CERT_OK" = "1" ]; then
+    for i in $(seq 1 15); do
+        CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 \
+            --resolve "${DOMAIN}:443:127.0.0.1" \
+            "https://${DOMAIN}${PANEL_PATH}/api/auth-status" 2>/dev/null || true)
+        if [ "$CODE" = "200" ] || [ "$CODE" = "401" ]; then PROXY_OK=1; break; fi
+        sleep 2
+    done
+fi
 
 echo ""
 echo -e "${GREEN}════════════════════════════════════════════${NC}"
@@ -453,21 +488,32 @@ echo -e "${GREEN}  Installation complete!${NC}"
 echo -e "${GREEN}════════════════════════════════════════════${NC}"
 echo ""
 echo -e "  Domain:     ${CYAN}$DOMAIN${NC}"
-echo -e "  Panel:      ${CYAN}https://$DOMAIN:8443${NC}"
+echo -e "  Panel:      ${CYAN}https://$DOMAIN$PANEL_PATH/${NC}"
 echo -e "  TT Status:  $(systemctl is-active trusttunnel 2>/dev/null)"
 echo -e "  Panel:      $(systemctl is-active tt-admin 2>/dev/null)"
+echo -e "  443 -> panel: $([ "$PROXY_OK" = "1" ] && echo -e "${GREEN}verified${NC}" || echo -e "${YELLOW}not verified${NC}")"
 echo ""
 echo -e "  ${YELLOW}1. Open the panel and create admin password (min 12 chars)${NC}"
 echo -e "  ${YELLOW}2. Add a VPN user through the panel${NC}"
 echo -e "  ${YELLOW}3. TrustTunnel will start automatically${NC}"
 echo ""
-if [ "$CERT_OK" != "1" ]; then
-    warn "No TLS certificate: the panel is bound to 127.0.0.1 only."
-    warn "Reach it with: ssh -L 8443:127.0.0.1:8443 root@$DOMAIN"
+echo -e "  The panel has no port of its own: it listens on 127.0.0.1:$PANEL_PORT and is"
+echo -e "  reached only through 443 under ${CYAN}$PANEL_PATH${NC}. Every other path on 443"
+echo -e "  answers as a generic JSON API, so keep the path to yourself."
+echo ""
+if [ "$PANEL_UP" != "1" ]; then
+    warn "The panel did not answer on loopback: journalctl -u tt-admin -n 50"
 fi
-echo -e "  ${YELLOW}Recommended: restrict port 8443 to your own IP, e.g.${NC}"
-echo -e "    ${CYAN}ufw allow from <your-ip> to any port 8443 proto tcp${NC}"
-echo -e "    ${CYAN}ufw allow 443/tcp && ufw enable${NC}"
+if [ "$CERT_OK" != "1" ]; then
+    warn "No TLS certificate, so 443 cannot serve the panel yet."
+    warn "Reach it meanwhile with: ssh -L ${PANEL_PORT}:127.0.0.1:${PANEL_PORT} root@$DOMAIN"
+    warn "then open http://127.0.0.1:${PANEL_PORT}${PANEL_PATH}/"
+elif [ "$PROXY_OK" != "1" ]; then
+    warn "443 did not reach the panel. Check [reverse_proxy] in $TT_DIR/vpn.toml"
+    warn "and: journalctl -u trusttunnel -n 50"
+fi
+echo -e "  ${YELLOW}Firewall: only 443 (tcp+udp) and SSH need to be open, e.g.${NC}"
+echo -e "    ${CYAN}ufw allow 443/tcp && ufw allow 443/udp && ufw allow OpenSSH && ufw enable${NC}"
 echo ""
 echo -e "  Deploy updates:  ${CYAN}$PANEL_DIR/deploy.sh${NC}"
 echo ""

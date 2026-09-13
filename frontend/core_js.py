@@ -36,13 +36,63 @@ function onUnauthorized(){
   stopRefreshTimers();
   toast(t('session_expired'),true);R()}
 
+// The endpoint's reverse proxy (1.1.0) forwards request headers but drops the
+// request body, so every POST would hang waiting for bytes that never arrive.
+// The payload therefore travels base64url-encoded in x-tt-b* headers, which the
+// panel turns back into a body before routing. Works with or without a proxy.
+var TX_CHUNK=1500;          // chars per header
+var TX_INLINE_MAX=16;       // headers before falling back to /api/_tx
+var TX_PART=4000;           // chars per /api/_tx part
+
+function _txEncode(s){
+  var bytes=new TextEncoder().encode(s),bin='';
+  for(var i=0;i<bytes.length;i++)bin+=String.fromCharCode(bytes[i]);
+  return btoa(bin).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')}
+
+function _txSplit(s,size){
+  var out=[];
+  for(var i=0;i<s.length;i+=size)out.push(s.slice(i,i+size));
+  return out}
+
+// Never split between the halves of a surrogate pair: each part is encoded on
+// its own, and a lone surrogate would not survive the round trip.
+function _txSplitText(s,size){
+  var out=[],i=0;
+  while(i<s.length){
+    var end=Math.min(i+size,s.length);
+    if(end<s.length){var c=s.charCodeAt(end-1);if(c>=0xD800&&c<=0xDBFF)end--}
+    out.push(s.slice(i,end));i=end}
+  return out}
+
+async function _txUpload(body){
+  var parts=_txSplitText(body,TX_PART);
+  var id=(await api('/_tx/new')).id;
+  for(var i=0;i<parts.length;i++){
+    await api('/_tx',{method:'POST',body:JSON.stringify({id:id,seq:i,total:parts.length,data:parts[i]})})}
+  return id}
+
 async function api(p,o){
   o=o||{};
+  var opts={credentials:'same-origin'};
+  for(var k in o)if(k!=='headers'&&k!=='body')opts[k]=o[k];
+  var hdr={'Content-Type':'application/json'};
+  if(o.headers)for(var hk in o.headers)hdr[hk]=o.headers[hk];
+  var method=(o.method||'GET').toUpperCase();
+  if(o.body!=null&&method!=='GET'&&method!=='HEAD'){
+    var chunks=_txSplit(_txEncode(String(o.body)),TX_CHUNK);
+    if(chunks.length<=TX_INLINE_MAX){
+      hdr['X-Tt-B']=String(chunks.length);
+      for(var ci=0;ci<chunks.length;ci++)hdr['X-Tt-B'+ci]=chunks[ci];
+    }else{
+      hdr['X-Tt-U']=await _txUpload(String(o.body));
+    }
+  }
+  opts.headers=hdr;
   var ctrl=new AbortController();
   var timer=setTimeout(function(){ctrl.abort()},REQUEST_TIMEOUT_MS);
   var r;
   try{
-    r=await fetch(A+p,{headers:{'Content-Type':'application/json'},credentials:'same-origin',signal:ctrl.signal,...o});
+    r=await fetch(A+p,{...opts,signal:ctrl.signal});
   }catch(err){
     clearTimeout(timer);
     throw new Error(err&&err.name==='AbortError'?t('request_timeout'):t('network_error'));

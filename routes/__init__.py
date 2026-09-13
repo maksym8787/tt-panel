@@ -153,6 +153,7 @@ async def favicon():
     return Response(status_code=204)
 
 
+import routes.transport_routes  # noqa: E402, F401
 import routes.auth_routes  # noqa: E402, F401
 import routes.user_routes  # noqa: E402, F401
 import routes.monitoring_routes  # noqa: E402, F401
