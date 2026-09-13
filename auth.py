@@ -31,6 +31,17 @@ LOGIN_MAX_ATTEMPTS = 5
 LOGIN_WINDOW = 300
 MIN_PASSWORD_LEN = 12
 
+# The panel is reachable from the internet, so a fixed 5-per-5-minutes window is
+# not enough on its own: an attacker simply waits it out. Each further batch of
+# failures from the same IP escalates the lockout, and bans survive a restart.
+LOCKOUT_STEPS = (300, 900, 3600, 21600, 86400)
+FAILED_LOG_MAX = 100
+BAN_STORE_MAX = 500
+
+# ip -> {"fails": int, "until": ts, "level": int}
+_login_state = {}
+_bans_loaded = False
+
 PBKDF2_ITERATIONS = 200_000
 
 
@@ -233,24 +244,128 @@ async def require_auth(request):
         raise HTTPException(401, "Unauthorized")
 
 
+def _fmt_wait(seconds: int) -> str:
+    seconds = max(1, int(seconds))
+    if seconds < 60:
+        return "%ds" % seconds
+    if seconds < 3600:
+        return "%dm" % ((seconds + 59) // 60)
+    return "%dh" % ((seconds + 3599) // 3600)
+
+
+def _load_bans():
+    """Restore active lockouts written by a previous process."""
+    global _bans_loaded
+    if _bans_loaded:
+        return
+    _bans_loaded = True
+    try:
+        db = load_panel_db()
+        now = time.time()
+        for ip, rec in (db.get("login_bans") or {}).items():
+            if isinstance(rec, dict) and rec.get("until", 0) > now:
+                _login_state[ip] = {"fails": int(rec.get("fails", 0)),
+                                    "until": float(rec["until"]),
+                                    "level": int(rec.get("level", 0))}
+        if _login_state:
+            logger.info("Restored %d active login lockout(s)", len(_login_state))
+    except Exception as e:
+        logger.warning("Could not restore login lockouts: %s", e)
+
+
+def _persist_bans():
+    def _mutate(db):
+        now = time.time()
+        active = {ip: {"until": st["until"], "fails": st["fails"], "level": st["level"]}
+                  for ip, st in _login_state.items() if st.get("until", 0) > now}
+        if len(active) > BAN_STORE_MAX:
+            keep = sorted(active.items(), key=lambda kv: -kv[1]["until"])[:BAN_STORE_MAX]
+            active = dict(keep)
+        db["login_bans"] = active
+
+    try:
+        update_panel_db(_mutate)
+    except Exception as e:
+        logger.warning("Could not persist login lockouts: %s", e)
+
+
 def check_rate_limit(ip: str):
+    """Raise 429 while `ip` is locked out. Call before verifying a password."""
+    _load_bans()
     now = time.time()
     with _login_lock:
-        attempts = [t for t in _login_attempts.get(ip, []) if now - t < LOGIN_WINDOW]
-        _login_attempts[ip] = attempts
-        if len(attempts) >= LOGIN_MAX_ATTEMPTS:
-            retry_in = int(LOGIN_WINDOW - (now - attempts[0])) + 1
-            raise HTTPException(429, "Too many attempts. Try again in %ds." % retry_in)
-        attempts.append(now)
+        st = _login_state.get(ip)
+        if st and st.get("until", 0) > now:
+            raise HTTPException(429, "Too many attempts. Try again in %s."
+                                % _fmt_wait(st["until"] - now))
+
+
+def record_login_failure(ip: str, user_agent: str = ""):
+    """Count a failed login and escalate the lockout when the window is exceeded."""
+    now = time.time()
+    with _login_lock:
+        st = _login_state.setdefault(ip, {"fails": 0, "until": 0.0, "level": 0, "first": now})
+        if now - st.get("first", now) > LOGIN_WINDOW and st["until"] <= now:
+            st["fails"] = 0
+            st["first"] = now
+        st["fails"] += 1
+        banned_for = 0
+        if st["fails"] >= LOGIN_MAX_ATTEMPTS:
+            step = min(st["level"], len(LOCKOUT_STEPS) - 1)
+            banned_for = LOCKOUT_STEPS[step]
+            st["until"] = now + banned_for
+            st["level"] = min(st["level"] + 1, len(LOCKOUT_STEPS) - 1)
+            st["fails"] = 0
+            st["first"] = now
+
+    if banned_for:
+        logger.warning("Login lockout: %s blocked for %s after %d failed attempts (UA: %.80s)",
+                       ip, _fmt_wait(banned_for), LOGIN_MAX_ATTEMPTS, user_agent or "-")
+        _persist_bans()
+    else:
+        logger.warning("Failed login from %s (UA: %.80s)", ip, user_agent or "-")
+
+    def _mutate(db):
+        log = db.get("failed_logins", [])
+        log.insert(0, {"ts": int(now), "ip": ip, "ua": (user_agent or "")[:120],
+                       "banned_for": banned_for})
+        db["failed_logins"] = log[:FAILED_LOG_MAX]
+
+    try:
+        update_panel_db(_mutate)
+    except Exception:
+        pass
+    return banned_for
+
+
+def clear_login_failures(ip: str):
+    with _login_lock:
+        had_ban = bool(_login_state.pop(ip, None))
+    if had_ban:
+        _persist_bans()
+
+
+def login_security_status():
+    now = time.time()
+    with _login_lock:
+        active = [{"ip": ip, "until": int(st["until"]), "level": st["level"]}
+                  for ip, st in _login_state.items() if st.get("until", 0) > now]
+    db = load_panel_db()
+    return {"locked_out": sorted(active, key=lambda x: -x["until"]),
+            "recent_failures": db.get("failed_logins", [])[:50]}
 
 
 def cleanup_stale_rate_limits():
+    """Drop expired lockouts so the table cannot grow without bound."""
     now = time.time()
+    removed = False
     with _login_lock:
-        stale_ips = [ip for ip, ts_list in _login_attempts.items()
-                     if all(now - t > LOGIN_WINDOW for t in ts_list)]
-        for ip in stale_ips:
-            _login_attempts.pop(ip, None)
+        for ip in [ip for ip, st in _login_state.items()
+                   if st.get("until", 0) <= now and now - st.get("first", 0) > LOGIN_WINDOW * 4]:
+            _login_state.pop(ip, None)
+            removed = True
+    if removed:
+        _persist_bans()
 
 
 def cleanup_expired_sessions():

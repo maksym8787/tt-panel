@@ -35,10 +35,39 @@ function settingText(obj,key,label,wide,tipKey,section){
     h('div',{style:{fontSize:'10px',color:'var(--tx3)',marginBottom:'3px',display:'flex',alignItems:'center'}},label,tipKey?tip(tipKey):null),
     h('input',{className:'input',type:'text',style:{width:wide?'100%':'200px',padding:'4px 8px',fontSize:'12px'},value:String(obj[key]||''),onInput:function(e){obj[key]=e.target.value;_setVpnEdit(section,key,e.target.value)}}))
 }
+function renderSecurityCard(){
+  var s=S.loginSecurity;
+  var banned=(s&&s.locked_out)||[];
+  var fails=(s&&s.recent_failures)||[];
+  return h('div',{className:'card'},
+    h('div',{className:'card-t',style:{display:'flex',justifyContent:'space-between',alignItems:'center'}},
+      h('span',null,t('login_security')),
+      h('button',{className:'btn btn-xs',onClick:function(e){withLoading(e.currentTarget,_loadLoginSecurity)}},t('refresh'))),
+    h('div',{style:{fontSize:'10px',color:'var(--tx3)',marginBottom:'10px',lineHeight:'1.5'}},t('login_security_hint')),
+    banned.length?h('div',{style:{marginBottom:'10px'}},
+      h('div',{style:{fontSize:'11px',fontWeight:'600',color:'var(--rd)',marginBottom:'6px'}},
+        t('locked_out')+': '+banned.length),
+      h('div',{style:{display:'flex',flexWrap:'wrap',gap:'6px'}},
+        banned.map(function(b){return h('span',{className:'badge b-rd',style:{fontSize:'11px'}},
+          b.ip+' — '+t('until')+' '+new Date(b.until*1000).toLocaleTimeString())}))):
+      h('div',{style:{fontSize:'11px',color:'var(--gn)',marginBottom:'10px'}},t('no_lockouts')),
+    fails.length?h('div',{className:'tbl-wrap',style:{maxHeight:'220px',overflow:'auto'}},
+      h('table',{className:'tbl'},
+        h('thead',null,h('tr',null,h('th',null,t('time')),h('th',null,t('ip')),
+          h('th',null,t('user_agent')),h('th',null,t('result')))),
+        h('tbody',null,fails.slice(0,25).map(function(f){return h('tr',null,
+          h('td',null,ts2dt(f.ts)),
+          h('td',{style:{fontFamily:'var(--m)',fontSize:'10px'}},f.ip||'—'),
+          h('td',{style:{fontSize:'10px',overflow:'hidden',textOverflow:'ellipsis',maxWidth:'220px'}},f.ua||'—'),
+          h('td',null,f.banned_for?h('span',{className:'badge b-rd',style:{fontSize:'10px'}},
+            t('blocked')+' '+Math.round(f.banned_for/60)+t('min_short')):'—'))}))))
+      :h('div',{style:{fontSize:'11px',color:'var(--tx3)',textAlign:'center',padding:'10px 0'}},t('no_failed_logins')));
+}
+
 function renderSettings(){
   // Loading is triggered by the tab switch, never from the render path.
   var s=S.settings;if(!s.vpn_toml&&s.vpn_toml!==''){return h('div',{className:'tab-content'},h('div',{className:'skeleton skel-card'}),h('div',{className:'skeleton skel-card'}))}
-  var va,ra;var ps=S.panelSettings||{};
+  var ps=S.panelSettings||{};
   var ttlOpts=[{v:300,l:'5 '+t('minutes')},{v:900,l:'15 '+t('minutes')},{v:1800,l:'30 '+t('minutes')},{v:3600,l:'1h'},{v:14400,l:'4h'},{v:43200,l:'12h'},{v:86400,l:'24h'}];
   var renewOn=ps.auto_renew_enabled!==false;
   var ss=S.structuredSettings;
@@ -161,6 +190,8 @@ function renderSettings(){
           h('td',{style:{fontSize:'10px',color:'var(--tx3)',wordBreak:'break-all'}},ho.cert_chain_path||''))}))):
         h('div',{style:{color:'var(--tx3)',fontSize:'12px',padding:'12px 0',textAlign:'center'}},'\u2014')));
   }
+  sections.push(renderSecurityCard());
+
   var rawOpen=_settingsExpand.rawToml;
   sections.push(h('div',{className:'card'},
     h('div',{className:'card-t',style:{cursor:'pointer'},onClick:function(){_settingsExpand.rawToml=!_settingsExpand.rawToml;R()}},
@@ -168,12 +199,12 @@ function renderSettings(){
     rawOpen?h('div',null,
       h('div',{style:{marginBottom:'12px'}},
         h('div',{style:{fontSize:'11px',fontWeight:'600',color:'var(--tx2)',marginBottom:'6px'}},'vpn.toml'),
-        va=h('textarea',{className:'input input-m',style:{minHeight:'200px'}},s.vpn_toml||''),
-        h('button',{className:'btn btn-sm',style:{marginTop:'10px'},onClick:function(e){saveCfg('vpn_toml',va.value,e.currentTarget)}},t('save'))),
+        h('textarea',{className:'input input-m',id:'raw-vpn',style:{minHeight:'200px'}},s.vpn_toml||''),
+        h('button',{className:'btn btn-sm',style:{marginTop:'10px'},onClick:function(e){saveCfg('vpn_toml',(document.getElementById('raw-vpn')||{}).value,e.currentTarget)}},t('save'))),
       h('div',{style:{marginBottom:'12px'}},
         h('div',{style:{fontSize:'11px',fontWeight:'600',color:'var(--tx2)',marginBottom:'6px'}},'rules.toml'),
-        ra=h('textarea',{className:'input input-m',style:{minHeight:'120px'}},s.rules_toml||''),
-        h('button',{className:'btn btn-sm',style:{marginTop:'10px'},onClick:function(e){saveCfg('rules_toml',ra.value,e.currentTarget)}},t('save'))),
+        h('textarea',{className:'input input-m',id:'raw-rules',style:{minHeight:'120px'}},s.rules_toml||''),
+        h('button',{className:'btn btn-sm',style:{marginTop:'10px'},onClick:function(e){saveCfg('rules_toml',(document.getElementById('raw-rules')||{}).value,e.currentTarget)}},t('save'))),
       h('div',null,
         h('div',{style:{fontSize:'11px',fontWeight:'600',color:'var(--tx2)',marginBottom:'6px'}},'hosts.toml ('+t('read_only')+')'),
         h('div',{className:'cb'},s.hosts_toml||''))):null));

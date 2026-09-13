@@ -16,7 +16,7 @@ function setTheme(th){S.theme=th;localStorage.setItem('tt_theme',th);applyTheme(
 function applyTheme(){document.documentElement.setAttribute('data-theme',S.theme)}
 var S={auth:false,setup:false,setupLocked:false,minPwLen:12,loading:true,tab:'dashboard',status:null,users:[],logs:null,settings:{},
   history:null,traffic:null,conns:null,online:null,summary:null,toast:null,modal:null,dbSize:null,
-  connTimeline:null,perUser:null,activeIps:{},monPeriod:24,connPeriod:24,pendingReload:false,userFilter:'',userSort:'name_asc',monLoading:false,logsLoading:false,dashLoading:false,structuredSettings:null,
+  connTimeline:null,perUser:null,loginSecurity:null,activeIps:{},monPeriod:24,connPeriod:24,pendingReload:false,userFilter:'',userSort:'name_asc',monLoading:false,logsLoading:false,dashLoading:false,structuredSettings:null,
   lang:localStorage.getItem('tt_lang')||'en',theme:localStorage.getItem('tt_theme')||'system',
   restartHistory:null,userNotes:{},panelSettings:null,lastActivity:Date.now()};
 
@@ -133,6 +133,7 @@ async function _loadConns(h){if(h!=null)S.connPeriod=h;try{S.conns=await api('/m
 async function _loadConnTimeline(){try{S.connTimeline=await api('/monitoring/conn-timeline?hours='+S.monPeriod)}catch(e){}}
 async function _loadOnline(){try{S.online=await api('/monitoring/online')}catch(e){}}
 async function _loadDbSize(){try{S.dbSize=await api('/monitoring/db-size')}catch(e){}}
+async function _loadLoginSecurity(){try{S.loginSecurity=await api('/security/logins');R()}catch(e){}}
 async function _loadPerUser(){try{S.perUser=await api('/monitoring/per-user?hours='+S.monPeriod)}catch(e){}}
 async function _loadActiveIps(){try{var r=await api('/active-ips');S.activeIps=r.active_ips||{}}catch(e){}}
 async function _checkPendingReload(){try{var r=await api('/pending-reload');S.pendingReload=r.pending}catch(e){}}
@@ -144,6 +145,7 @@ async function loadSettings(){
   S.settingsLoading=true;
   try{S.settings=await api('/settings')}catch(e){toast(e.message,true)}
   try{S.structuredSettings=await api('/settings/structured')}catch(e){}
+  try{S.loginSecurity=await api('/security/logins')}catch(e){}
   S.settingsLoading=false;R()}
 async function loadMonitorAll(){
   S.monLoading=true;R();
@@ -200,8 +202,138 @@ async function doChgAdmin(cur,p,btn){
     catch(e){toast(e.message,true)}})}
 async function applyReload(btn){await withLoading(btn,async function(){try{await api('/apply-reload',{method:'POST'});toast(t('service')+' '+t('restart').toLowerCase());S.pendingReload=false;R();setTimeout(loadDash,2000)}catch(e){toast(e.message,true)}})}
 
-function h(t,a){var e=document.createElement(t);var deferValue=null;if(a){var keys=Object.keys(a);for(var ki=0;ki<keys.length;ki++){var k=keys[ki],v=a[k];if(k==='style'&&typeof v==='object')Object.assign(e.style,v);else if(k.substr(0,2)==='on')e.addEventListener(k.slice(2).toLowerCase(),v);else if(k==='className')e.className=v;else if(k==='value'){deferValue=v}else if(k==='checked'||k==='selected'||k==='disabled'){if(v!==false&&v!=null)e[k]=v}else e.setAttribute(k,v)}}for(var i=2;i<arguments.length;i++){var x=arguments[i];if(Array.isArray(x)){for(var j=0;j<x.length;j++)appendNode(e,x[j])}else{appendNode(e,x)}}if(deferValue!==null)e.value=deferValue;return e}
+// Handlers live in el.__h and are invoked through one stable dispatcher per
+// event type. Re-rendering then only swaps the function in __h — no listener
+// churn, and a patched node never keeps a stale closure.
+function _bindHandler(e,type,fn){
+  e.__h=e.__h||{};
+  var had=(e.__h[type]!==undefined);
+  e.__h[type]=fn;
+  if(!had){
+    e.addEventListener(type,function(ev){
+      var f=e.__h&&e.__h[type];
+      if(f)return f.call(e,ev);
+    });
+  }
+}
+
+var _PROPS={checked:1,selected:1,disabled:1};
+
+function h(t,a){
+  var e=document.createElement(t);
+  e.__a=a||{};
+  var deferValue=null;
+  if(a){
+    var keys=Object.keys(a);
+    for(var ki=0;ki<keys.length;ki++){
+      var k=keys[ki],v=a[k];
+      if(k==='style'&&typeof v==='object')Object.assign(e.style,v);
+      else if(k.substr(0,2)==='on')_bindHandler(e,k.slice(2).toLowerCase(),v);
+      else if(k==='className')e.className=v;
+      else if(k==='value'){deferValue=v}
+      else if(_PROPS[k]){if(v!==false&&v!=null)e[k]=v}
+      else e.setAttribute(k,v);
+    }
+  }
+  for(var i=2;i<arguments.length;i++){
+    var x=arguments[i];
+    if(Array.isArray(x)){for(var j=0;j<x.length;j++)appendNode(e,x[j])}
+    else{appendNode(e,x)}
+  }
+  if(deferValue!==null){e.value=deferValue;e.__val=deferValue}
+  return e}
+
 function appendNode(e,x){if(x==null||x===false||x===undefined)return;if(typeof x==='number')x=String(x);if(typeof x==='string')e.appendChild(document.createTextNode(x));else if(x.nodeType)e.appendChild(x);else if(Array.isArray(x)){for(var i=0;i<x.length;i++)appendNode(e,x[i])}}
+
+// ─── Incremental DOM update ──────────────────────────────
+// Replacing the whole tree on every tick is what made the panel look like it
+// reloaded: it wiped typed text, focus, selection, hover state and forced
+// Chart.js to rebuild every canvas. Patching touches only what changed.
+function _sameNode(a,b){
+  if(a.nodeType!==b.nodeType)return false;
+  if(a.nodeType===3)return true;
+  if(a.nodeName!==b.nodeName)return false;
+  // an explicit id is treated as identity, so slots never get swapped
+  if(a.id||b.id)return a.id===b.id;
+  return true}
+
+function _patchAttrs(oldEl,newEl){
+  var oa=oldEl.__a||{}, na=newEl.__a||{};
+  // styles set inline by h()
+  if(na.style&&typeof na.style==='object'){
+    var sk=Object.keys(na.style);
+    for(var i=0;i<sk.length;i++){
+      if(oldEl.style[sk[i]]!==newEl.style[sk[i]])oldEl.style[sk[i]]=newEl.style[sk[i]];
+    }
+  }
+  if(oldEl.className!==newEl.className)oldEl.className=newEl.className;
+  // attributes present on the new node
+  var na2=newEl.attributes;
+  for(var j=0;j<na2.length;j++){
+    var at=na2[j];
+    if(at.name==='style'||at.name==='class')continue;
+    if(oldEl.getAttribute(at.name)!==at.value)oldEl.setAttribute(at.name,at.value);
+  }
+  // attributes that disappeared
+  var oa2=oldEl.attributes;
+  for(var k=oa2.length-1;k>=0;k--){
+    var an=oa2[k].name;
+    if(an==='style'||an==='class')continue;
+    if(!newEl.hasAttribute(an))oldEl.removeAttribute(an);
+  }
+  // real properties
+  var pk=Object.keys(_PROPS);
+  for(var p=0;p<pk.length;p++){
+    var name=pk[p];
+    if(name in na || name in oa){
+      var want=(name in na)?(na[name]===false||na[name]==null?false:na[name]):false;
+      if(oldEl[name]!==want)oldEl[name]=want;
+    }
+  }
+  // swap handlers in place — the dispatcher stays attached
+  if(newEl.__h){
+    var hk=Object.keys(newEl.__h);
+    for(var hi=0;hi<hk.length;hi++)_bindHandler(oldEl,hk[hi],newEl.__h[hk[hi]]);
+  }
+  if(oldEl.__h){
+    var ok=Object.keys(oldEl.__h);
+    for(var oi=0;oi<ok.length;oi++){
+      if(!newEl.__h||newEl.__h[ok[oi]]===undefined)oldEl.__h[ok[oi]]=null;
+    }
+  }
+  // never fight the user for the field they are typing in
+  if(newEl.__val!==undefined&&document.activeElement!==oldEl&&oldEl.value!==newEl.__val){
+    oldEl.value=newEl.__val;
+  }
+  oldEl.__a=na;
+}
+
+function _patch(parent,oldNode,newNode){
+  if(!oldNode&&!newNode)return;
+  if(!oldNode){parent.appendChild(newNode);return}
+  if(!newNode){parent.removeChild(oldNode);return}
+  if(!_sameNode(oldNode,newNode)){parent.replaceChild(newNode,oldNode);return}
+  if(oldNode.nodeType===3){
+    if(oldNode.nodeValue!==newNode.nodeValue)oldNode.nodeValue=newNode.nodeValue;
+    return;
+  }
+  if(oldNode.nodeType!==1)return;
+  // a canvas keeps its Chart.js instance only if we leave the element alone
+  if(oldNode.nodeName==='CANVAS'){_patchAttrs(oldNode,newNode);return}
+  _patchAttrs(oldNode,newNode);
+  var oldKids=[],newKids=[],n;
+  for(n=0;n<oldNode.childNodes.length;n++)oldKids.push(oldNode.childNodes[n]);
+  for(n=0;n<newNode.childNodes.length;n++)newKids.push(newNode.childNodes[n]);
+  var max=Math.max(oldKids.length,newKids.length);
+  for(var i=0;i<max;i++)_patch(oldNode,oldKids[i],newKids[i]);
+}
+
+function patchInto(container,newChildren){
+  var oldKids=[],i;
+  for(i=0;i<container.childNodes.length;i++)oldKids.push(container.childNodes[i]);
+  var max=Math.max(oldKids.length,newChildren.length);
+  for(i=0;i<max;i++)_patch(container,oldKids[i],newChildren[i]);
+}
 
 function loadingView(full){return h('div',{className:'loading-box',style:full?{minHeight:'60vh'}:{}},h('div',{className:'spinner'+(full?' spinner-lg':'')}),t('loading'))}
 
@@ -251,10 +383,10 @@ function isEditing(){
   var tag=(a.tagName||'').toLowerCase();
   return tag==='input'||tag==='textarea'||tag==='select'||a.isContentEditable===true}
 
-// Background refreshes must never wipe what the user is typing or reviewing.
-function Rbg(cb){
-  if(S.modal||isEditing()){if(cb)cb();return}
-  R(cb)}
+// Since rendering now patches instead of rebuilding, a background refresh is
+// safe even while a modal is open or a field has focus: it updates only the
+// values that actually changed.
+function Rbg(cb){R(cb)}
 
 function _captureFocus(){
   var a=document.activeElement;
@@ -270,24 +402,38 @@ function _restoreFocus(f){
 
 var _rTimer=null;var _rCallbacks=[];
 function R(cb){if(cb)_rCallbacks.push(cb);if(_rTimer)return;_rTimer=requestAnimationFrame(function(){_rTimer=null;_doRender();var cbs=_rCallbacks.slice();_rCallbacks=[];for(var i=0;i<cbs.length;i++){try{cbs[i]()}catch(e){console.error('render callback failed:',e)}}})}
-function _doRender(){
+function _slots(){
   var root=document.getElementById('root');
-  var scrollY=window.scrollY;
+  var modal=document.getElementById('modal-slot');
+  var app=document.getElementById('app-slot');
+  if(!modal||!app){
+    // Fixed slots keep positions stable, so a modal appearing never makes the
+    // patcher mistake the app subtree for the modal subtree.
+    root.replaceChildren();
+    modal=document.createElement('div');modal.id='modal-slot';
+    app=document.createElement('div');app.id='app-slot';
+    root.appendChild(modal);root.appendChild(app);
+  }
+  return {modal:modal,app:app}}
+
+function _doRender(){
+  var s=_slots();
+  // Safety net: patching preserves focus, but a node whose tag changed is
+  // genuinely replaced, and then we put the caret back.
   var focus=_captureFocus();
   try{
-    var frag=document.createDocumentFragment();
-    if(S.modal)frag.appendChild(renderModal());
-    if(S.loading){frag.appendChild(loadingView(true));root.replaceChildren(frag);return}
-    if(!S.auth){frag.appendChild(renderLogin());root.replaceChildren(frag);return}
-    frag.appendChild(renderApp());
-    root.replaceChildren(frag);
-    window.scrollTo(0,scrollY);
-    _restoreFocus(focus);
+    patchInto(s.modal, S.modal?[renderModal()]:[]);
+    var body;
+    if(S.loading)body=loadingView(true);
+    else if(!S.auth)body=renderLogin();
+    else body=renderApp();
+    patchInto(s.app,[body]);
+    if(document.activeElement!==(focus&&document.getElementById(focus.id)))_restoreFocus(focus);
     if(S.modal&&S.modal.t==='cfg')paintQr();
     if(S.tab==='monitor'&&window.Chart)drawMonitorCharts();
   }catch(err){
     console.error('R() error:',err);
-    root.replaceChildren(h('div',{style:{color:'#ef4444',padding:'40px',fontFamily:'monospace',fontSize:'13px'}},
+    s.app.replaceChildren(h('div',{style:{color:'#ef4444',padding:'40px',fontFamily:'monospace',fontSize:'13px'}},
       h('b',null,t('render_error')),h('br'),h('pre',null,String(err&&err.message||err))));
   }
 }
@@ -301,18 +447,23 @@ function _softUpdateLogin(){
   document.querySelectorAll('.tg button').forEach(function(b,i){b.className=([S.theme==='dark',S.theme==='light',S.theme==='system'][i])?'on':''});
 }
 function renderLogin(){
-  var pw;var isS=S.setup;
+  var isS=S.setup;
   if(S.setupLocked){
     return h('div',{className:'lw'},h('div',{className:'lc'},
       h('div',{className:'lt'},t('setup_locked_title')),
       h('div',{className:'ls'},t('setup_locked_msg'))));
   }
-  var submit=function(){isS?doSetup(pw.value):doLogin(pw.value)};
+  // Read from the DOM, never from a captured node: after a patch the element
+  // created in this render may have been discarded in favour of the live one.
+  var submit=function(){
+    var el=document.getElementById('login-pw');
+    if(!el)return;
+    isS?doSetup(el.value):doLogin(el.value)};
   var card=h('div',{className:'lw'},h('div',{className:'lc'},
     h('div',{style:{textAlign:'center',marginBottom:'20px'}},h('img',{src:LOGO_FULL,alt:'TrustTunnel',className:'logo-img',style:{maxHeight:'56px',maxWidth:'260px',width:'auto',height:'auto',margin:'0 auto 12px'}})),
     h('div',{className:'lt'},isS?t('initial_setup'):''),
     h('div',{className:'ls'},isS?t('create_admin_pw'):t('enter_admin_pw')),
-    h('div',{className:'fg'},pw=h('input',{className:'input',type:'password',id:'login-pw',autocomplete:isS?'new-password':'current-password',placeholder:t('password'),style:{textAlign:'center'},onKeydown:function(e){if(e.key==='Enter'){e.preventDefault();submit()}}})),
+    h('div',{className:'fg'},h('input',{className:'input',type:'password',id:'login-pw',autocomplete:isS?'new-password':'current-password',placeholder:t('password'),style:{textAlign:'center'},onKeydown:function(e){if(e.key==='Enter'){e.preventDefault();submit()}}})),
     h('button',{className:'btn btn-p',style:{width:'100%',justifyContent:'center',padding:'12px',fontSize:'13px',borderRadius:'10px'},onClick:submit},isS?t('create_password'):t('sign_in')),
     h('div',{style:{display:'flex',justifyContent:'center',marginTop:'16px',gap:'8px'}},langThemeControls())));
   setTimeout(function(){var el=document.getElementById('login-pw');if(el&&!isEditing())el.focus()},FOCUS_DELAY_MS);

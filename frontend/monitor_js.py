@@ -112,19 +112,19 @@ function drawConnChart(){
 function renderPerUser(){
   var pu=S.perUser;
   if(!pu)return null;
-  if(!pu.available){
-    return h('div',{className:'card'},
-      h('div',{className:'card-t'},t('per_user_traffic')),
-      h('div',{style:{color:'var(--tx3)',fontSize:'12px',padding:'12px 0',lineHeight:'1.6'}},
-        t('per_user_disabled')));
-  }
   var rows=pu.users||[];
+  // Live data gone (feature switched off) but history exists — still show it,
+  // flagged, rather than hiding everything that was already collected.
   if(!rows.length){
     return h('div',{className:'card'},
       h('div',{className:'card-t'},t('per_user_traffic')),
-      h('div',{style:{color:'var(--tx3)',fontSize:'12px',textAlign:'center',padding:'16px'}},t('no_conn_data')));
+      h('div',{style:{color:'var(--tx3)',fontSize:'12px',padding:'12px 0',lineHeight:'1.6'}},
+        pu.available?t('no_conn_data'):t('per_user_disabled')));
   }
+  var stale=!pu.available?h('div',{style:{fontSize:'10px',color:'var(--or)',marginBottom:'8px',lineHeight:'1.5'}},
+    '⚠ '+t('per_user_stale')):null;
   return expandableCard('per_user',t('per_user_traffic'),
+    h('div',null, stale,
     h('div',{className:'tbl-wrap'},
       h('table',{className:'tbl'},
         h('thead',null,h('tr',null,
@@ -144,7 +144,7 @@ function renderPerUser(){
             h('td',{style:{textAlign:'right',color:'var(--gn)'}},fmt(u.outbound||0)),
             h('td',{style:{textAlign:'right',color:'var(--or)'}},fmt(u.inbound||0)),
             h('td',{style:{fontFamily:'var(--m)',fontSize:'10px'}},(g.flag?g.flag+' ':'')+(u.ip||'—')),
-            h('td',null,u.last_seen?ago(u.last_seen):'—'))})))));
+            h('td',null,u.last_seen?ago(u.last_seen):'—'))}))))));
 }
 
 function renderMonitor(){

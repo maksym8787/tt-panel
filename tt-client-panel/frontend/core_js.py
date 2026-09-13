@@ -100,8 +100,138 @@ function tip(key){
     }},'ℹ')}
 function fl(label,tipKey){return h('label',{className:'fl',style:{display:'flex',alignItems:'center'}},label,tipKey?tip(tipKey):null)}
 
-function h(t,a){var e=document.createElement(t);var dv=null;if(a){var ks=Object.keys(a);for(var i=0;i<ks.length;i++){var k=ks[i],v=a[k];if(k==='style'&&typeof v==='object')Object.assign(e.style,v);else if(k.substr(0,2)==='on')e.addEventListener(k.slice(2).toLowerCase(),v);else if(k==='className')e.className=v;else if(k==='value'){dv=v}else if(k==='checked'||k==='selected'||k==='disabled'){if(v!==false&&v!=null)e[k]=v}else e.setAttribute(k,v)}}for(var i=2;i<arguments.length;i++){var x=arguments[i];if(Array.isArray(x)){for(var j=0;j<x.length;j++)an(e,x[j])}else an(e,x)}if(dv!==null)e.value=dv;return e}
+// Handlers live in el.__h and are invoked through one stable dispatcher per
+// event type. Re-rendering then only swaps the function in __h — no listener
+// churn, and a patched node never keeps a stale closure.
+function _bindHandler(e,type,fn){
+  e.__h=e.__h||{};
+  var had=(e.__h[type]!==undefined);
+  e.__h[type]=fn;
+  if(!had){
+    e.addEventListener(type,function(ev){
+      var f=e.__h&&e.__h[type];
+      if(f)return f.call(e,ev);
+    });
+  }
+}
+
+var _PROPS={checked:1,selected:1,disabled:1};
+
+function h(t,a){
+  var e=document.createElement(t);
+  e.__a=a||{};
+  var deferValue=null;
+  if(a){
+    var keys=Object.keys(a);
+    for(var ki=0;ki<keys.length;ki++){
+      var k=keys[ki],v=a[k];
+      if(k==='style'&&typeof v==='object')Object.assign(e.style,v);
+      else if(k.substr(0,2)==='on')_bindHandler(e,k.slice(2).toLowerCase(),v);
+      else if(k==='className')e.className=v;
+      else if(k==='value'){deferValue=v}
+      else if(_PROPS[k]){if(v!==false&&v!=null)e[k]=v}
+      else e.setAttribute(k,v);
+    }
+  }
+  for(var i=2;i<arguments.length;i++){
+    var x=arguments[i];
+    if(Array.isArray(x)){for(var j=0;j<x.length;j++)an(e,x[j])}
+    else{an(e,x)}
+  }
+  if(deferValue!==null){e.value=deferValue;e.__val=deferValue}
+  return e}
+
 function an(e,x){if(x==null||x===false||x===undefined)return;if(typeof x==='number')x=String(x);if(typeof x==='string')e.appendChild(document.createTextNode(x));else if(x.nodeType)e.appendChild(x);else if(Array.isArray(x)){for(var i=0;i<x.length;i++)an(e,x[i])}}
+
+// ─── Incremental DOM update ──────────────────────────────
+// Replacing the whole tree on every tick is what made the panel look like it
+// reloaded: it wiped typed text, focus, selection, hover state and forced
+// Chart.js to rebuild every canvas. Patching touches only what changed.
+function _sameNode(a,b){
+  if(a.nodeType!==b.nodeType)return false;
+  if(a.nodeType===3)return true;
+  if(a.nodeName!==b.nodeName)return false;
+  // an explicit id is treated as identity, so slots never get swapped
+  if(a.id||b.id)return a.id===b.id;
+  return true}
+
+function _patchAttrs(oldEl,newEl){
+  var oa=oldEl.__a||{}, na=newEl.__a||{};
+  // styles set inline by h()
+  if(na.style&&typeof na.style==='object'){
+    var sk=Object.keys(na.style);
+    for(var i=0;i<sk.length;i++){
+      if(oldEl.style[sk[i]]!==newEl.style[sk[i]])oldEl.style[sk[i]]=newEl.style[sk[i]];
+    }
+  }
+  if(oldEl.className!==newEl.className)oldEl.className=newEl.className;
+  // attributes present on the new node
+  var na2=newEl.attributes;
+  for(var j=0;j<na2.length;j++){
+    var at=na2[j];
+    if(at.name==='style'||at.name==='class')continue;
+    if(oldEl.getAttribute(at.name)!==at.value)oldEl.setAttribute(at.name,at.value);
+  }
+  // attributes that disappeared
+  var oa2=oldEl.attributes;
+  for(var k=oa2.length-1;k>=0;k--){
+    var an=oa2[k].name;
+    if(an==='style'||an==='class')continue;
+    if(!newEl.hasAttribute(an))oldEl.removeAttribute(an);
+  }
+  // real properties
+  var pk=Object.keys(_PROPS);
+  for(var p=0;p<pk.length;p++){
+    var name=pk[p];
+    if(name in na || name in oa){
+      var want=(name in na)?(na[name]===false||na[name]==null?false:na[name]):false;
+      if(oldEl[name]!==want)oldEl[name]=want;
+    }
+  }
+  // swap handlers in place — the dispatcher stays attached
+  if(newEl.__h){
+    var hk=Object.keys(newEl.__h);
+    for(var hi=0;hi<hk.length;hi++)_bindHandler(oldEl,hk[hi],newEl.__h[hk[hi]]);
+  }
+  if(oldEl.__h){
+    var ok=Object.keys(oldEl.__h);
+    for(var oi=0;oi<ok.length;oi++){
+      if(!newEl.__h||newEl.__h[ok[oi]]===undefined)oldEl.__h[ok[oi]]=null;
+    }
+  }
+  // never fight the user for the field they are typing in
+  if(newEl.__val!==undefined&&document.activeElement!==oldEl&&oldEl.value!==newEl.__val){
+    oldEl.value=newEl.__val;
+  }
+  oldEl.__a=na;
+}
+
+function _patch(parent,oldNode,newNode){
+  if(!oldNode&&!newNode)return;
+  if(!oldNode){parent.appendChild(newNode);return}
+  if(!newNode){parent.removeChild(oldNode);return}
+  if(!_sameNode(oldNode,newNode)){parent.replaceChild(newNode,oldNode);return}
+  if(oldNode.nodeType===3){
+    if(oldNode.nodeValue!==newNode.nodeValue)oldNode.nodeValue=newNode.nodeValue;
+    return;
+  }
+  if(oldNode.nodeType!==1)return;
+  // a canvas keeps its Chart.js instance only if we leave the element alone
+  if(oldNode.nodeName==='CANVAS'){_patchAttrs(oldNode,newNode);return}
+  _patchAttrs(oldNode,newNode);
+  var oldKids=[],newKids=[],n;
+  for(n=0;n<oldNode.childNodes.length;n++)oldKids.push(oldNode.childNodes[n]);
+  for(n=0;n<newNode.childNodes.length;n++)newKids.push(newNode.childNodes[n]);
+  var max=Math.max(oldKids.length,newKids.length);
+  for(var i=0;i<max;i++)_patch(oldNode,oldKids[i],newKids[i]);
+}
+
+function patchInto(container,newChildren){
+  var oldKids=[],i;
+  for(i=0;i<container.childNodes.length;i++)oldKids.push(container.childNodes[i]);
+  var max=Math.max(oldKids.length,newChildren.length);
+  for(i=0;i<max;i++)_patch(container,oldKids[i],newChildren[i]);
+}
 
 // Draft-backed inputs: a background refresh must not wipe what the user typed.
 function dinput(key,attrs){
@@ -150,8 +280,9 @@ function isEditing(){
   var tag=(a.tagName||'').toLowerCase();
   return tag==='input'||tag==='textarea'||tag==='select'||a.isContentEditable===true}
 
-// Background render: skipped while a modal is open or a field has focus.
-function Rbg(cb){if(S.modal||isEditing()){if(cb)cb();return}R(cb)}
+// Rendering patches instead of rebuilding, so a background refresh is safe
+// even while a modal is open or a field has focus.
+function Rbg(cb){R(cb)}
 
 function _captureFocus(){
   var a=document.activeElement;
@@ -167,23 +298,34 @@ function _restoreFocus(f){
 
 var _rTimer=null;var _rCallbacks=[];
 function R(cb){if(cb)_rCallbacks.push(cb);if(_rTimer)return;_rTimer=requestAnimationFrame(function(){_rTimer=null;_doRender();var cbs=_rCallbacks.slice();_rCallbacks=[];for(var i=0;i<cbs.length;i++){try{cbs[i]()}catch(e){console.error('render callback failed:',e)}}})}
-function _doRender(){
+
+function _slots(){
   var root=document.getElementById('root');
-  var scrollY=window.scrollY;
+  var modal=document.getElementById('modal-slot');
+  var app=document.getElementById('app-slot');
+  if(!modal||!app){
+    root.replaceChildren();
+    modal=document.createElement('div');modal.id='modal-slot';
+    app=document.createElement('div');app.id='app-slot';
+    root.appendChild(modal);root.appendChild(app);
+  }
+  return {modal:modal,app:app}}
+
+function _doRender(){
+  var s=_slots();
   var focus=_captureFocus();
   try{
-    var frag=document.createDocumentFragment();
-    if(S.modal)frag.appendChild(renderModal());
-    if(S.loading){frag.appendChild(h('div',{className:'loading-box',style:{minHeight:'60vh'}},h('div',{className:'spinner spinner-lg'}),t('loading')));root.replaceChildren(frag);return}
-    if(!S.auth){frag.appendChild(renderLogin());root.replaceChildren(frag);return}
-    frag.appendChild(renderApp());
-    root.replaceChildren(frag);
-    window.scrollTo(0,scrollY);
-    _restoreFocus(focus);
+    patchInto(s.modal, S.modal?[renderModal()]:[]);
+    var body;
+    if(S.loading)body=h('div',{className:'loading-box',style:{minHeight:'60vh'}},h('div',{className:'spinner spinner-lg'}),t('loading'));
+    else if(!S.auth)body=renderLogin();
+    else body=renderApp();
+    patchInto(s.app,[body]);
+    if(document.activeElement!==(focus&&document.getElementById(focus.id)))_restoreFocus(focus);
     if(S.tab==='monitor')drawNetChart();
   }catch(err){
     console.error('R() error:',err);
-    root.replaceChildren(h('div',{style:{color:'#ef4444',padding:'40px',fontFamily:'monospace',fontSize:'13px'}},
+    s.app.replaceChildren(h('div',{style:{color:'#ef4444',padding:'40px',fontFamily:'monospace',fontSize:'13px'}},
       h('b',null,t('render_error')),h('br'),h('pre',null,String(err&&err.message||err))));
   }
 }

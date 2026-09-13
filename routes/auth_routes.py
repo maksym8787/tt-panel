@@ -10,7 +10,7 @@ from auth import (
     load_panel_db, update_panel_db, hash_password, verify_password,
     check_session, require_auth, check_rate_limit, _hash_token, needs_rehash,
     setup_locked, request_is_secure, MIN_PASSWORD_LEN,
-    _login_lock, _login_attempts,
+    record_login_failure, clear_login_failures, login_security_status, _fmt_wait,
 )
 from routes import app
 
@@ -64,6 +64,10 @@ async def login(request: Request):
     if not stored:
         raise HTTPException(400, "Setup required")
     if not await asyncio.to_thread(verify_password, pw, stored):
+        ua = request.headers.get("user-agent", "")
+        banned = await asyncio.to_thread(record_login_failure, client_ip, ua)
+        if banned:
+            raise HTTPException(429, "Too many attempts. Try again in %s." % _fmt_wait(banned))
         raise HTTPException(401, "Bad password")
 
     token = secrets.token_hex(32)
@@ -82,8 +86,7 @@ async def login(request: Request):
         return ttl
 
     session_ttl = await asyncio.to_thread(update_panel_db, _mutate)
-    with _login_lock:
-        _login_attempts.pop(client_ip, None)
+    await asyncio.to_thread(clear_login_failures, client_ip)
 
     resp = JSONResponse({"ok": True})
     _set_session_cookie(resp, token, session_ttl, request_is_secure(request))
@@ -113,6 +116,13 @@ async def auth_status(request: Request):
         "setup_locked": setup_locked(),
         "min_password_len": MIN_PASSWORD_LEN,
     }
+
+
+@app.get("/api/security/logins")
+async def security_logins(request: Request):
+    """Active lockouts and recent failed logins, for the Settings tab."""
+    await require_auth(request)
+    return await asyncio.to_thread(login_security_status)
 
 
 @app.post("/api/change-password")
