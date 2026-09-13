@@ -56,6 +56,9 @@ def _env_flag(name: str, default: bool = False) -> bool:
 PANEL_HOST = os.environ.get("TT_CLIENT_PANEL_HOST", "127.0.0.1")
 BEHIND_PROXY = _env_flag("TT_BEHIND_PROXY")
 ALLOW_INSECURE_HTTP = _env_flag("TT_ALLOW_INSECURE_HTTP")
+# The VPN client manages its own routes; only enable this if your gateway
+# actually invokes setup-routes.sh from the unit.
+MANAGE_ROUTES = _env_flag("TT_MANAGE_ROUTES")
 
 _ssl_configured = False
 _shutdown_event = threading.Event()

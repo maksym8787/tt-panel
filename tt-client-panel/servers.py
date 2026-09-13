@@ -9,7 +9,7 @@ from pathlib import Path
 
 from config import (
     TT_CONFIGS_DIR, TT_ACTIVE_LINK, TT_CLIENT_BIN, SETUP_ROUTES_SH,
-    SERVICE_NAME, GATEWAY_IF, TUN_IF, LAN_GATEWAY, LAN_NETWORK, logger,
+    SERVICE_NAME, GATEWAY_IF, TUN_IF, LAN_GATEWAY, LAN_NETWORK, MANAGE_ROUTES, logger,
 )
 from auth import load_panel_db, save_panel_db, update_panel_db
 
@@ -684,6 +684,12 @@ def _server_endpoint_ip(server):
 
 
 def _update_routes_script(server):
+    # trusttunnel_client installs its own split-tunnel routes (policy table),
+    # so this helper is off by default: on a stock setup the generated script
+    # is never invoked by the unit and only causes confusion. Set
+    # TT_MANAGE_ROUTES=1 for gateways that really do call it.
+    if not MANAGE_ROUTES:
+        return False
     ip = _server_endpoint_ip(server)
     if not ip:
         logger.error("Skipping routes script update for %s: no usable endpoint IP", server.get("id"))
