@@ -218,9 +218,13 @@ def request_is_secure(request) -> bool:
     if config._ssl_configured:
         return True
     if getattr(config, "BEHIND_PROXY", False):
+        # The operator asserts a TLS-terminating proxy in front. Honour an
+        # explicit X-Forwarded-Proto when the proxy sends one; TrustTunnel's
+        # reverse proxy does not, and there TLS is always on (port 443).
         proto = request.headers.get("x-forwarded-proto", "")
-        if proto.split(",")[0].strip().lower() == "https":
-            return True
+        if proto:
+            return proto.split(",")[0].strip().lower() == "https"
+        return True
     return request.url.scheme == "https"
 
 

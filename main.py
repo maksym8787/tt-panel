@@ -15,6 +15,10 @@ def _resolve_bind():
     cert = CERTS_DIR / "cert.pem"
     key = CERTS_DIR / "key.pem"
 
+    if config.PANEL_TLS in ("off", "0", "false", "no"):
+        logger.info("TLS disabled (TT_PANEL_TLS=off): plain HTTP on %s:%d", PANEL_HOST, PANEL_PORT)
+        return PANEL_HOST, {}
+
     if cert.exists() and key.exists():
         config._ssl_configured = True
         logger.info("HTTPS on %s:%d", PANEL_HOST, PANEL_PORT)

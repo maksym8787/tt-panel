@@ -1,7 +1,10 @@
 PREAMBLE_JS = r'''
-var LOGO_ICON='/static/favicon.png';
-var LOGO_FULL='/static/logo-full.png';
-var A='/api';
+// BASE is injected by the server: '' when the panel is served at the root, or
+// '/prefix' when it sits behind the endpoint's reverse proxy.
+if(typeof BASE==='undefined')var BASE='';
+var LOGO_ICON=BASE+'/static/favicon.png';
+var LOGO_FULL=BASE+'/static/logo-full.png';
+var A=BASE+'/api';
 var POLL_DASH_MS=30000;
 var POLL_MON_MS=60000;
 var TOAST_MS=3500;

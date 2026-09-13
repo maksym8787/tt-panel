@@ -50,8 +50,26 @@ PANEL_HOST = os.environ.get("TT_PANEL_HOST", "0.0.0.0")
 BEHIND_PROXY = _env_flag("TT_BEHIND_PROXY")
 # Escape hatch for deliberately running the panel over plaintext HTTP.
 ALLOW_INSECURE_HTTP = _env_flag("TT_ALLOW_INSECURE_HTTP")
+# auto = TLS when certs exist; off = plain HTTP (the endpoint's reverse proxy
+# terminates TLS on 443 and speaks HTTP/1.1 to the origin).
+PANEL_TLS = os.environ.get("TT_PANEL_TLS", "auto").strip().lower()
 # ip-api.com geolocation for connection logs. Sends client IPs to a third party.
 GEO_LOOKUP_ENABLED = _env_flag("TT_GEO_LOOKUP", True)
+
+def _normalize_base_path(raw: str) -> str:
+    """'' (served at root) or '/prefix' with no trailing slash."""
+    p = (raw or "").strip().strip('"').strip("'")
+    if not p or p == "/":
+        return ""
+    if not p.startswith("/"):
+        p = "/" + p
+    return p.rstrip("/")
+
+
+# When set, the panel answers only under this prefix and every other path gets a
+# blank page. Used together with the endpoint's [reverse_proxy] so the panel is
+# reachable on 443 without looking like a panel.
+PANEL_BASE_PATH = _normalize_base_path(os.environ.get("TT_PANEL_PATH", ""))
 
 DOMAIN = None
 _ssl_configured = False
