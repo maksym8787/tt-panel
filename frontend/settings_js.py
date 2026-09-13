@@ -64,6 +64,67 @@ function renderSecurityCard(){
       :h('div',{style:{fontSize:'11px',color:'var(--tx3)',textAlign:'center',padding:'10px 0'}},t('no_failed_logins')));
 }
 
+var _tgEdits={};
+function _tg(key,def){return _tgEdits[key]!==undefined?_tgEdits[key]:((S.telegram&&S.telegram[key])!==undefined?S.telegram[key]:def)}
+function tgToggle(key,label,def){
+  var on=!!_tg(key,def);
+  return h('div',{style:{display:'flex',alignItems:'center',gap:'6px',marginBottom:'6px'}},
+    h('button',{className:'btn btn-xs'+(on?' btn-p':''),style:{minWidth:'40px'},
+      onClick:function(){_tgEdits[key]=!on;R()}},on?'ON':'OFF'),
+    h('span',{style:{fontSize:'11px',color:'var(--tx2)'}},label))}
+
+function renderTelegramCard(){
+  var tg=S.telegram;
+  if(!tg)return null;
+  var enabled=!!_tg('enabled',false);
+  return h('div',{className:'card'},
+    h('div',{className:'card-t',style:{display:'flex',justifyContent:'space-between',alignItems:'center'}},
+      h('span',null,t('telegram_alerts')),
+      h('div',{style:{display:'flex',gap:'6px'}},
+        h('button',{className:'btn btn-xs',onClick:function(e){withLoading(e.currentTarget,function(){
+          return api('/telegram/test',{method:'POST'}).then(function(){toast(t('telegram_test_sent'))})
+            .catch(function(er){toast(er.message,true)})})}},t('telegram_test')),
+        h('button',{className:'btn btn-sm btn-p',onClick:function(e){withLoading(e.currentTarget,function(){
+          var body=Object.assign({},_tgEdits);
+          var tok=document.getElementById('tg-token');
+          if(tok&&tok.value.trim())body.bot_token=tok.value.trim();
+          return api('/telegram',{method:'PUT',body:JSON.stringify(body)}).then(function(r){
+            S.telegram=Object.assign({},S.telegram,r.telegram);
+            if(body.bot_token)S.telegram.bot_token_set=(body.bot_token!=='-');
+            _tgEdits={};if(tok)tok.value='';
+            toast(t('saved'));R()})
+            .catch(function(er){toast(er.message,true)})})}},t('save')))),
+    h('div',{style:{fontSize:'10px',color:'var(--tx3)',marginBottom:'10px',lineHeight:'1.5'}},t('telegram_hint')),
+    tgToggle('enabled',t('telegram_enabled'),false),
+    h('div',{className:'grid grid2',style:{gap:'10px',marginTop:'8px'}},
+      h('div',{className:'fg'},
+        h('label',{className:'fl',for:'tg-token'},t('telegram_token')+(tg.bot_token_set?' ('+t('telegram_token_set')+')':'')),
+        h('input',{className:'input input-m',id:'tg-token',type:'password',autocomplete:'off',
+          placeholder:tg.bot_token_set?t('telegram_token_keep'):'123456:ABC-DEF...'})),
+      h('div',{className:'fg'},
+        h('label',{className:'fl',for:'tg-chat'},t('telegram_chat')),
+        h('input',{className:'input input-m',id:'tg-chat',value:String(_tg('chat_id','')),
+          placeholder:'-1001234567890',
+          onInput:function(e){_tgEdits.chat_id=e.target.value}}))),
+    enabled?h('div',{style:{marginTop:'8px'}},
+      h('div',{style:{fontSize:'11px',fontWeight:'600',color:'var(--tx2)',marginBottom:'6px'}},t('telegram_events')),
+      tgToggle('alert_service_down',t('tg_alert_service_down'),true),
+      tgToggle('alert_cert_expiring',t('tg_alert_cert_expiring'),true),
+      tgToggle('alert_disk_full',t('tg_alert_disk_full'),true),
+      tgToggle('alert_login_lockout',t('alert_login_lockout'),true),
+      h('div',{className:'grid grid2',style:{gap:'10px',marginTop:'6px'}},
+        h('div',null,
+          h('div',{style:{fontSize:'10px',color:'var(--tx3)',marginBottom:'3px'}},t('cert_days_threshold')),
+          h('input',{className:'input',type:'number',min:'1',max:'90',style:{width:'80px',padding:'4px 8px',fontSize:'12px'},
+            value:String(_tg('cert_days_threshold',14)),
+            onInput:function(e){var v=parseInt(e.target.value);if(!isNaN(v))_tgEdits.cert_days_threshold=v}})),
+        h('div',null,
+          h('div',{style:{fontSize:'10px',color:'var(--tx3)',marginBottom:'3px'}},t('disk_threshold')),
+          h('input',{className:'input',type:'number',min:'50',max:'99',style:{width:'80px',padding:'4px 8px',fontSize:'12px'},
+            value:String(_tg('disk_percent_threshold',85)),
+            onInput:function(e){var v=parseInt(e.target.value);if(!isNaN(v))_tgEdits.disk_percent_threshold=v}})))):null);
+}
+
 function renderSettings(){
   // Loading is triggered by the tab switch, never from the render path.
   var s=S.settings;if(!s.vpn_toml&&s.vpn_toml!==''){return h('div',{className:'tab-content'},h('div',{className:'skeleton skel-card'}),h('div',{className:'skeleton skel-card'}))}
@@ -190,6 +251,7 @@ function renderSettings(){
           h('td',{style:{fontSize:'10px',color:'var(--tx3)',wordBreak:'break-all'}},ho.cert_chain_path||''))}))):
         h('div',{style:{color:'var(--tx3)',fontSize:'12px',padding:'12px 0',textAlign:'center'}},'\u2014')));
   }
+  sections.push(renderTelegramCard());
   sections.push(renderSecurityCard());
 
   var rawOpen=_settingsExpand.rawToml;

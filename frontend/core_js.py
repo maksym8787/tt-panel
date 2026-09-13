@@ -16,7 +16,7 @@ function setTheme(th){S.theme=th;localStorage.setItem('tt_theme',th);applyTheme(
 function applyTheme(){document.documentElement.setAttribute('data-theme',S.theme)}
 var S={auth:false,setup:false,setupLocked:false,minPwLen:12,loading:true,tab:'dashboard',status:null,users:[],logs:null,settings:{},
   history:null,traffic:null,conns:null,online:null,summary:null,toast:null,modal:null,dbSize:null,
-  connTimeline:null,perUser:null,loginSecurity:null,activeIps:{},monPeriod:24,connPeriod:24,pendingReload:false,userFilter:'',userSort:'name_asc',monLoading:false,logsLoading:false,dashLoading:false,structuredSettings:null,
+  connTimeline:null,perUser:null,loginSecurity:null,telegram:null,activeIps:{},monPeriod:24,connPeriod:24,pendingReload:false,userFilter:'',userSort:'name_asc',monLoading:false,logsLoading:false,dashLoading:false,structuredSettings:null,
   lang:localStorage.getItem('tt_lang')||'en',theme:localStorage.getItem('tt_theme')||'system',
   restartHistory:null,userNotes:{},panelSettings:null,lastActivity:Date.now()};
 
@@ -146,6 +146,7 @@ async function loadSettings(){
   try{S.settings=await api('/settings')}catch(e){toast(e.message,true)}
   try{S.structuredSettings=await api('/settings/structured')}catch(e){}
   try{S.loginSecurity=await api('/security/logins')}catch(e){}
+  try{S.telegram=(await api('/telegram')).telegram}catch(e){}
   S.settingsLoading=false;R()}
 async function loadMonitorAll(){
   S.monLoading=true;R();

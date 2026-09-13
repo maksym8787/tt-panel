@@ -22,7 +22,7 @@ from servers import (
     reorder_servers, activate_server, get_active_server_id, parse_deeplink,
     _check_tun_up,
 )
-from health import get_health_status, get_net_history
+from health import get_health_status, get_net_history, get_server_latency
 from frontend import FRONTEND_HTML, APP_JS, APP_CSS
 
 app = FastAPI(title="TrustTunnel Client Panel", docs_url=None, redoc_url=None)
@@ -321,6 +321,14 @@ async def net_history(request: Request, hours: int = 1):
     if len(filtered) > max_points:
         filtered = filtered[::len(filtered) // max_points]
     return {"history": filtered}
+
+
+@app.get("/api/server-latency")
+async def server_latency(request: Request, hours: int = 24):
+    """Per-server TCP handshake history, measured independently of the active one."""
+    await require_auth(request)
+    data = await asyncio.to_thread(get_server_latency, hours)
+    return {"servers": data, "hours": hours}
 
 
 @app.get("/api/failover-log")

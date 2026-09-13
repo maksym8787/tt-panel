@@ -21,6 +21,7 @@ SERVICE_NAME = "trusttunnel-client"
 PANEL_DIR = Path(os.environ.get("TT_CLIENT_PANEL_DIR", "/opt/tt-client-panel"))
 PANEL_DB = PANEL_DIR / "panel.json"
 NET_HISTORY_FILE = PANEL_DIR / "net_history.json"
+SRV_LATENCY_FILE = PANEL_DIR / "server_latency.json"
 PANEL_PORT = int(os.environ.get("TT_CLIENT_PANEL_PORT", "8443"))
 
 import re as _re

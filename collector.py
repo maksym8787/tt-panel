@@ -333,6 +333,7 @@ _last_session_cleanup = 0.0
 def collector_loop():
     global _last_log_pos, _last_session_cleanup
     from services import auto_renew_cert_if_needed, backfill_created_at
+    from services.notify import check_and_alert
 
     _last_log_pos = _load_last_log_pos()
     try:
@@ -353,6 +354,7 @@ def collector_loop():
                 _last_session_cleanup = time.time()
                 cleanup_expired_sessions()
             auto_renew_cert_if_needed()
+            check_and_alert()
         except Exception:
             logger.error("Collector error:\n%s", traceback.format_exc())
         _shutdown_event.wait(timeout=COLLECT_INTERVAL)

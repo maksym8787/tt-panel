@@ -11,8 +11,8 @@ function startRefresh(){
       await loadStatus();
       S._prevOnBackup=S.status&&S.status.on_backup;
       if(S.status&&S.status.on_backup&&!prev)await loadServers();
-      if(S.tab==='monitor')await loadNetHistory();
-      Rbg(function(){if(S.tab==='monitor')drawNetChart()});
+      if(S.tab==='monitor'){await loadNetHistory();await loadServerLatency()}
+      Rbg(function(){if(S.tab==='monitor'){drawNetChart();drawLatencyChart()}});
     }finally{_refreshing=false}
   },POLL_MS)}
 

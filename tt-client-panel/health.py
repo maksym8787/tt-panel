@@ -4,7 +4,7 @@ import threading
 import time
 from datetime import datetime
 
-from config import TUN_IF, NET_HISTORY_FILE, SERVICE_NAME, logger, _shutdown_event
+from config import TUN_IF, NET_HISTORY_FILE, SRV_LATENCY_FILE, SERVICE_NAME, logger, _shutdown_event
 from auth import (
     load_panel_db, save_panel_db, update_panel_db,
     cleanup_stale_rate_limits, cleanup_expired_sessions,
@@ -235,6 +235,111 @@ def get_net_history():
         return _net_aggregated + _net_recent
 
 
+_srv_latency = {}
+_SRV_LATENCY_MAX = 576          # 48h at one probe per 5 min
+_SRV_PROBE_INTERVAL = 300
+_last_srv_probe = 0
+
+
+def _load_server_latency():
+    global _srv_latency
+    try:
+        if SRV_LATENCY_FILE.exists():
+            data = json.loads(SRV_LATENCY_FILE.read_text())
+            if isinstance(data, dict):
+                _srv_latency = {k: v[-_SRV_LATENCY_MAX:] for k, v in data.items() if isinstance(v, list)}
+                logger.info("Loaded latency history for %d server(s)", len(_srv_latency))
+    except Exception as e:
+        logger.warning("Could not load latency history: %s", e)
+
+
+def _save_server_latency():
+    try:
+        tmp = SRV_LATENCY_FILE.with_suffix(".tmp")
+        tmp.write_text(json.dumps({k: v[-_SRV_LATENCY_MAX:] for k, v in _srv_latency.items()}))
+        tmp.replace(SRV_LATENCY_FILE)
+    except Exception as e:
+        logger.warning("Could not save latency history: %s", e)
+
+
+def _probe_server(address: str):
+    """TCP handshake time in ms, or None if unreachable.
+
+    Measures every configured server independently of which one is active, so
+    the panel can show which endpoint is actually the most stable.
+    """
+    import socket as _sock
+    host = address.split(":")[0]
+    if address.startswith("["):
+        end = address.find("]")
+        host = address[1:end] if end > 0 else host
+        port = int(address[end + 2:]) if end > 0 and len(address) > end + 2 else 443
+    else:
+        parts = address.rsplit(":", 1)
+        port = int(parts[1]) if len(parts) == 2 and parts[1].isdigit() else 443
+    start = time.monotonic()
+    s = None
+    try:
+        s = _sock.create_connection((host, port), timeout=5)
+        return round((time.monotonic() - start) * 1000, 1)
+    except Exception:
+        return None
+    finally:
+        if s:
+            try:
+                s.close()
+            except Exception:
+                pass
+
+
+def _probe_all_servers():
+    global _last_srv_probe
+    now = time.time()
+    if now - _last_srv_probe < _SRV_PROBE_INTERVAL:
+        return
+    _last_srv_probe = now
+    try:
+        servers = load_panel_db().get("servers", [])
+    except Exception:
+        return
+    ts = int(now)
+    changed = False
+    for srv in servers:
+        addrs = srv.get("addresses") or []
+        if not addrs:
+            continue
+        ms = _probe_server(str(addrs[0]))
+        series = _srv_latency.setdefault(srv["id"], [])
+        series.append({"ts": ts, "ms": ms})
+        if len(series) > _SRV_LATENCY_MAX:
+            del series[:-_SRV_LATENCY_MAX]
+        changed = True
+    # drop series for servers that no longer exist
+    alive = {s["id"] for s in servers}
+    for sid in [k for k in _srv_latency if k not in alive]:
+        _srv_latency.pop(sid, None)
+        changed = True
+    if changed:
+        _save_server_latency()
+
+
+def get_server_latency(hours=24):
+    cutoff = time.time() - max(1, min(int(hours), 168)) * 3600
+    out = {}
+    for sid, series in _srv_latency.items():
+        pts = [p for p in series if p.get("ts", 0) >= cutoff]
+        vals = [p["ms"] for p in pts if p.get("ms") is not None]
+        out[sid] = {
+            "points": pts,
+            "avg": round(sum(vals) / len(vals), 1) if vals else None,
+            "min": min(vals) if vals else None,
+            "max": max(vals) if vals else None,
+            "loss_pct": round(100.0 * (len(pts) - len(vals)) / len(pts), 1) if pts else None,
+            "samples": len(pts),
+        }
+    return out
+
+
 def _ping_through_tun():
     try:
         r = subprocess.run(
@@ -315,12 +420,14 @@ def _try_failover():
 
 def health_loop():
     _load_net_history()
+    _load_server_latency()
     logger.info("Health check loop started")
     _shutdown_event.wait(10)
     interval = 30
     while not _shutdown_event.is_set():
         try:
             _collect_net_stats()
+            _probe_all_servers()
             db = load_panel_db()
             try:
                 interval = max(10, min(int(db.get("settings", {}).get("health_check_interval", 30)), 300))

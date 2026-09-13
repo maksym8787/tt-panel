@@ -243,6 +243,62 @@ def _apply_log_rotation(settings):
         pass
 
 
+@app.get("/api/telegram")
+async def get_telegram(request: Request):
+    await require_auth(request)
+    from services.notify import get_settings, DEFAULTS
+    cfg = await asyncio.to_thread(get_settings)
+    # never hand the token back to the browser, only whether one is stored
+    safe = {k: v for k, v in cfg.items() if k != "bot_token"}
+    safe["bot_token_set"] = bool(cfg.get("bot_token"))
+    safe["defaults"] = {k: v for k, v in DEFAULTS.items() if k != "bot_token"}
+    return {"telegram": safe}
+
+
+@app.put("/api/telegram")
+async def update_telegram(request: Request):
+    await require_auth(request)
+    from services.notify import DEFAULTS
+    body = await request.json()
+    updates = {}
+    for key in ("enabled", "alert_service_down", "alert_cert_expiring",
+                "alert_disk_full", "alert_login_lockout"):
+        if key in body:
+            updates[key] = bool(body[key])
+    if "chat_id" in body:
+        updates["chat_id"] = str(body["chat_id"]).strip()[:64]
+    # an empty token means "keep the stored one"; "-" clears it
+    if body.get("bot_token"):
+        token = str(body["bot_token"]).strip()
+        updates["bot_token"] = "" if token == "-" else token[:200]
+    if "cert_days_threshold" in body:
+        updates["cert_days_threshold"] = _clamped_int(body, "cert_days_threshold", 1, 90)
+    if "disk_percent_threshold" in body:
+        updates["disk_percent_threshold"] = _clamped_int(body, "disk_percent_threshold", 50, 99)
+
+    def _mutate(db):
+        cfg = db.setdefault("telegram", dict(DEFAULTS))
+        cfg.update(updates)
+        return {k: v for k, v in cfg.items() if k != "bot_token"}
+
+    saved = await asyncio.to_thread(update_panel_db, _mutate)
+    return {"ok": True, "telegram": saved}
+
+
+@app.post("/api/telegram/test")
+async def test_telegram(request: Request):
+    await require_auth(request)
+    from services.notify import send_message
+    import socket
+    ok, err = await asyncio.to_thread(
+        send_message,
+        "✅ <b>TrustTunnel panel</b>\nTest message — alerts are configured correctly.\n\n<i>%s</i>"
+        % socket.gethostname())
+    if not ok:
+        raise HTTPException(400, "Telegram rejected the message: " + err)
+    return {"ok": True}
+
+
 @app.get("/api/disk-info")
 async def disk_info(request: Request):
     await require_auth(request)

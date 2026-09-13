@@ -7,7 +7,7 @@ var RELOAD_DELAY_MS=2000;
 
 var S={auth:false,setup:false,setupLocked:false,minPwLen:12,loading:true,tab:'servers',
   servers:[],activeServerId:'',status:null,failoverLog:[],settings:{},
-  toast:null,modal:null,netHistory:[],netPeriod:1,lang:localStorage.getItem('tt_lang')||'en',
+  toast:null,modal:null,netHistory:[],netPeriod:1,srvLatency:null,latPeriod:24,lang:localStorage.getItem('tt_lang')||'en',
   theme:localStorage.getItem('tt_theme')||'system',addMode:'deeplink',flPage:0,
   draft:{},staleTicks:0};
 
@@ -322,7 +322,7 @@ function _doRender(){
     else body=renderApp();
     patchInto(s.app,[body]);
     if(document.activeElement!==(focus&&document.getElementById(focus.id)))_restoreFocus(focus);
-    if(S.tab==='monitor')drawNetChart();
+    if(S.tab==='monitor'){drawNetChart();drawLatencyChart()}
   }catch(err){
     console.error('R() error:',err);
     s.app.replaceChildren(h('div',{style:{color:'#ef4444',padding:'40px',fontFamily:'monospace',fontSize:'13px'}},
@@ -374,7 +374,7 @@ function renderApp(){
         h('button',{className:'btn btn-xs btn-ghost',onClick:function(){S.modal={t:'chgadmin'};R()}},t('password_btn')),
         h('button',{className:'btn btn-xs btn-ghost',onClick:doLogout},t('logout')))),
     h('div',{className:'tabs'},tabs.map(function(tb){return h('button',{className:'tab'+(S.tab===tb.id?' on':''),
-      onClick:function(){S.tab=tb.id;if(tb.id==='servers')loadAll();if(tb.id==='monitor'){loadStatus();loadFailoverLog();loadNetHistory().then(function(){R(drawNetChart)})}if(tb.id==='settings')loadSettings();R()}},tb.label)})),
+      onClick:function(){S.tab=tb.id;if(tb.id==='servers')loadAll();if(tb.id==='monitor'){loadStatus();loadFailoverLog();loadServerLatency();loadNetHistory().then(function(){R(function(){drawNetChart();drawLatencyChart()})})}if(tb.id==='settings')loadSettings();R()}},tb.label)})),
     h('div',{className:'tab-content'},S.tab==='servers'?renderServers():S.tab==='monitor'?renderMonitor():renderSettings()));
 }
 

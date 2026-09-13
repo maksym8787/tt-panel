@@ -322,6 +322,11 @@ def record_login_failure(ip: str, user_agent: str = ""):
         logger.warning("Login lockout: %s blocked for %s after %d failed attempts (UA: %.80s)",
                        ip, _fmt_wait(banned_for), LOGIN_MAX_ATTEMPTS, user_agent or "-")
         _persist_bans()
+        try:
+            from services.notify import notify_login_lockout
+            notify_login_lockout(ip, banned_for)
+        except Exception:
+            pass
     else:
         logger.warning("Failed login from %s (UA: %.80s)", ip, user_agent or "-")
 

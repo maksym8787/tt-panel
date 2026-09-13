@@ -207,7 +207,9 @@ function renderMonitor(){
               h('td',{style:{overflow:'hidden',textOverflow:'ellipsis'}},c.ua||''),
               h('td',{style:{overflow:'hidden',textOverflow:'ellipsis'}},c.dst||''))}))))
         ,paginationBar('connlog',connRows.length,25)):
-        h('div',{style:{color:'var(--tx3)',fontSize:'12px',textAlign:'center',padding:'16px'}},t('no_conn_data'))),
+        h('div',{style:{color:'var(--tx3)',fontSize:'12px',textAlign:'center',padding:'16px',lineHeight:'1.6'}},
+          t('no_conn_data'),
+          h('div',{style:{fontSize:'10px',marginTop:'6px'}},t('conn_log_needs_debug')))),
 
     S.conns&&S.conns.top_destinations&&S.conns.top_destinations.length?
       expandableCard('top_dst',t('top_destinations'),
