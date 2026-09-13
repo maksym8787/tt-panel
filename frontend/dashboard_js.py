@@ -11,7 +11,8 @@ function mkVpsStat(label,pct,unit,color,sub){
 }
 
 function renderDash(){
-  var s=S.status;if(!s){loadAll();return h('div',{className:'tab-content'},h('div',{className:'skeleton skel-card'}),h('div',{className:'skeleton skel-card'}),h('div',{className:'skeleton skel-card'}))}
+  // No fetching from the render path: loading is driven by checkAuth/tab switches/timers.
+  var s=S.status;if(!s){return h('div',{className:'tab-content'},h('div',{className:'skeleton skel-card'}),h('div',{className:'skeleton skel-card'}),h('div',{className:'skeleton skel-card'}))}
   var l=s.live||{};var cert=s.certificate;var sm=S.summary;
   var certDays=cert?cert.days:null;var certClass=certDays!=null?(certDays<14?'off':certDays<30?'warn':'on'):'';
 
@@ -34,11 +35,11 @@ function renderDash(){
       h('div',{className:'stat'},
         h('div',{className:'stat-l'},t('sockets')),
         h('div',{className:'stat-v count-up'},(l.tcp_sockets||0)+' / '+(l.udp_sockets||0)),
-        h('div',{className:'stat-sub'},'FDs: '+(l.open_fds||0))),
+        h('div',{className:'stat-sub'},t('fds')+': '+(l.open_fds||0))),
       h('div',{className:'stat'},
         h('div',{className:'stat-l'},t('mem_cpu')),
         h('div',{className:'stat-v count-up'},(l.memory_mb||0)+' MB'),
-        h('div',{className:'stat-sub'},'CPU: '+(l.cpu_seconds||0)+'s total')),
+        h('div',{className:'stat-sub'},t('cpu_total').replace('{s}',l.cpu_seconds||0))),
       h('div',{className:'stat '+(certDays!=null&&certDays<14?'stat-red':certDays!=null&&certDays<30?'stat-orange':'')},
         h('div',{className:'stat-l'},t('certificate')),
         h('div',{className:'stat-v count-up '+certClass},certDays!=null?certDays+'d':'\u2014'),
@@ -73,15 +74,15 @@ function renderDash(){
       h('div',{className:'card-t'},t('controls')),
       h('div',{className:'bg'},
         h('button',{className:'btn btn-sm btn-p',onClick:function(){S.modal={t:'add'};R()}},t('quick_add_user')),
-        h('button',{className:'btn btn-sm',onClick:function(e){svcAct('restart',e.currentTarget)}},t('restart')),
+        h('button',{className:'btn btn-sm',onClick:function(e){confirmSvcAct('restart',e.currentTarget)}},t('restart')),
         h('button',{className:'btn btn-sm',onClick:function(e){svcAct('reload',e.currentTarget)}},t('reload_tls')),
-        s.service&&s.service.active?h('button',{className:'btn btn-sm btn-d',onClick:function(e){svcAct('stop',e.currentTarget)}},t('stop')):h('button',{className:'btn btn-sm btn-p',onClick:function(e){svcAct('start',e.currentTarget)}},t('start')),
+        s.service&&s.service.active?h('button',{className:'btn btn-sm btn-d',onClick:function(e){confirmSvcAct('stop',e.currentTarget)}},t('stop')):h('button',{className:'btn btn-sm btn-p',onClick:function(e){svcAct('start',e.currentTarget)}},t('start')),
         h('button',{className:'btn btn-sm',onClick:renewCert},t('renew_cert')))),
 
     h('div',{className:'card'},
       h('div',{className:'card-t'},t('server_info')),
       h('div',{style:{fontFamily:'var(--m)',fontSize:'11px',color:'var(--tx3)',lineHeight:'1.8',whiteSpace:'pre-wrap'}},
-        t('domain')+':          '+s.domain+'\nIP:              '+s.ip+'\nPID:             '+(s.service&&s.service.pid?s.service.pid:'\u2014')+'\n'+t('server_uptime')+':  '+fmtUptime(s.vps&&s.vps.uptime_seconds)+'\n'+t('service_uptime')+': '+(s.service&&s.service.uptime_seconds?new Date(Date.now()-s.service.uptime_seconds*1000).toLocaleString():'\u2014'))),
+        t('domain')+':          '+s.domain+'\nIP:              '+s.ip+'\nPID:             '+(s.service&&s.service.pid?s.service.pid:'\u2014')+'\n'+t('server_uptime')+':  '+fmtUptime(s.vps&&s.vps.uptime_seconds)+'\n'+t('service_uptime')+': '+fmtUptime(s.service&&s.service.uptime_seconds)+(s.service&&s.service.uptime_seconds?' ('+t('since')+' '+new Date(Date.now()-s.service.uptime_seconds*1000).toLocaleString()+')':''))),
 
     h('div',{className:'card'},
       h('div',{className:'card-t'},t('restart_history')),

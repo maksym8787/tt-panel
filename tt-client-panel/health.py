@@ -5,7 +5,10 @@ import time
 from datetime import datetime
 
 from config import TUN_IF, NET_HISTORY_FILE, SERVICE_NAME, logger, _shutdown_event
-from auth import load_panel_db, save_panel_db
+from auth import (
+    load_panel_db, save_panel_db, update_panel_db,
+    cleanup_stale_rate_limits, cleanup_expired_sessions,
+)
 from servers import get_active_server_id, get_next_failover_server, activate_server, _check_tun_up
 
 
@@ -16,7 +19,12 @@ _health_lock = threading.Lock()
 
 _net_recent = []
 _net_aggregated = []
-_RECENT_MAX = 120
+# Recent points are kept by AGE, not by count. A fixed 120-entry cap used to
+# evict points before they were old enough to be aggregated, so at a 10s health
+# interval the aggregate was never written and anything older than ~20 minutes
+# vanished. The count is now only a memory guard, sized well above the window.
+_RECENT_WINDOW = 3600
+_RECENT_MAX = 4000
 _AGGREGATED_MAX = 105120
 _AGG_INTERVAL = 300
 _prev_rx = 0
@@ -31,7 +39,7 @@ def _load_net_history():
         if NET_HISTORY_FILE.exists():
             data = json.loads(NET_HISTORY_FILE.read_text())
             _net_aggregated = data.get("aggregated", [])[-_AGGREGATED_MAX:]
-            cutoff = time.time() - 3600
+            cutoff = time.time() - _RECENT_WINDOW
             _net_recent = [p for p in data.get("recent", []) if p.get("ts", 0) > cutoff]
             logger.info("Loaded net history: %d recent, %d aggregated", len(_net_recent), len(_net_aggregated))
     except Exception as e:
@@ -75,30 +83,47 @@ def _get_external_ip():
     return _external_ip
 
 
+_uptime_cache = {"value": 0, "ts": 0.0}
+_UPTIME_TTL = 10
+
+
 def _get_tt_service_uptime():
+    """Service uptime in seconds.
+
+    Cached: /api/status is polled every 10s per open tab, and this used to spawn
+    two processes on every single call.
+    """
+    now = time.time()
+    if now - _uptime_cache["ts"] < _UPTIME_TTL:
+        return _uptime_cache["value"]
+
+    value = 0
     try:
         r = subprocess.run(
             ["systemctl", "show", SERVICE_NAME, "--no-pager",
-             "-p", "ActiveState,ActiveEnterTimestamp"],
+             "-p", "ActiveState,ActiveEnterTimestampMonotonic"],
             capture_output=True, text=True, timeout=5
         )
         active = False
-        enter_ts = ""
+        enter_monotonic = None
         for line in r.stdout.splitlines():
             if line.startswith("ActiveState="):
                 active = line.split("=", 1)[1].strip() == "active"
-            elif line.startswith("ActiveEnterTimestamp=") and "Monotonic" not in line:
-                enter_ts = line.split("=", 1)[1].strip()
-        if not active or not enter_ts:
-            return 0
-        import subprocess as _sp
-        r2 = _sp.run(["date", "-d", enter_ts, "+%s"], capture_output=True, text=True, timeout=5)
-        if r2.returncode == 0 and r2.stdout.strip():
-            enter_epoch = int(r2.stdout.strip())
-            return max(0, int(time.time()) - enter_epoch)
+            elif line.startswith("ActiveEnterTimestampMonotonic="):
+                raw = line.split("=", 1)[1].strip()
+                enter_monotonic = int(raw) if raw.isdigit() else None
+        if active and enter_monotonic:
+            # Monotonic microseconds since boot — compare against /proc/uptime
+            # instead of shelling out to `date`, and immune to wall-clock jumps.
+            with open("/proc/uptime") as f:
+                boot_elapsed = float(f.read().split()[0])
+            value = max(0, int(boot_elapsed - enter_monotonic / 1_000_000))
     except Exception as e:
         logger.debug("tt_uptime error: %s", e)
-    return 0
+
+    _uptime_cache["value"] = value
+    _uptime_cache["ts"] = now
+    return value
 
 
 def get_health_status():
@@ -160,9 +185,11 @@ def _collect_net_stats():
         entry = {"ts": int(now), "rx_bps": int(d_rx / dt), "tx_bps": int(d_tx / dt)}
         with _health_lock:
             _net_recent.append(entry)
+            # Roll points older than the window into the aggregate BEFORE the
+            # memory guard can drop them.
+            _aggregate_old_points()
             if len(_net_recent) > _RECENT_MAX:
                 del _net_recent[:-_RECENT_MAX]
-            _aggregate_old_points()
     _prev_rx = rx
     _prev_tx = tx
     _prev_net_ts = now
@@ -174,9 +201,9 @@ def _collect_net_stats():
 
 
 def _aggregate_old_points():
-    cutoff = time.time() - 3600
+    cutoff = time.time() - _RECENT_WINDOW
     old = [p for p in _net_recent if p["ts"] < cutoff]
-    if len(old) < 5:
+    if not old:
         return
     bucket_ts = (old[0]["ts"] // _AGG_INTERVAL) * _AGG_INTERVAL
     bucket = []
@@ -252,8 +279,9 @@ def _try_failover():
     if not settings.get("auto_failover", True):
         return
 
-    threshold = settings.get("failover_threshold", 3)
-    if _fail_count < threshold:
+    with _health_lock:
+        fails = _fail_count
+    if fails < settings.get("failover_threshold", 3):
         return
 
     current = get_active_server_id()
@@ -262,19 +290,22 @@ def _try_failover():
         logger.warning("No failover server available")
         return
 
-    logger.info("Failover: %s -> %s (after %d failures)", current, next_id, _fail_count)
+    logger.info("Failover: %s -> %s (after %d failures)", current, next_id, fails)
 
     log_entry = {
         "ts": datetime.now().isoformat(timespec="seconds"),
         "from": current,
         "to": next_id,
-        "reason": f"health_check_failed_{_fail_count}x",
+        "reason": f"health_check_failed_{fails}x",
     }
-    flog = db.get("failover_log", [])
-    flog.insert(0, log_entry)
-    db["failover_log"] = flog[:200]
-    db["on_backup"] = True
-    save_panel_db(db)
+
+    def _mutate(d):
+        flog = d.get("failover_log", [])
+        flog.insert(0, log_entry)
+        d["failover_log"] = flog[:200]
+        d["on_backup"] = True
+
+    update_panel_db(_mutate)
 
     with _health_lock:
         _fail_count = 0
@@ -285,48 +316,27 @@ def _try_failover():
 def health_loop():
     _load_net_history()
     logger.info("Health check loop started")
-    time.sleep(10)
+    _shutdown_event.wait(10)
+    interval = 30
     while not _shutdown_event.is_set():
         try:
             _collect_net_stats()
             db = load_panel_db()
-            interval = db.get("settings", {}).get("health_check_interval", 30)
-            active = get_active_server_id()
-            if active:
-                fails = _do_health_check()
-                if fails > 0:
+            try:
+                interval = max(10, min(int(db.get("settings", {}).get("health_check_interval", 30)), 300))
+            except (TypeError, ValueError):
+                interval = 30
+            if get_active_server_id():
+                if _do_health_check() > 0:
                     _try_failover()
-            if int(time.time()) % 300 < max(10, interval):
-                _cleanup_rate_limits()
-                _cleanup_sessions()
+            if int(time.time()) % 300 < interval:
+                cleanup_stale_rate_limits()
+                cleanup_expired_sessions()
         except Exception as e:
             logger.error("Health check error: %s", e)
-        _shutdown_event.wait(max(10, interval))
-
-
-def _cleanup_rate_limits():
-    from auth import _login_lock, _login_attempts
-    now = time.time()
-    with _login_lock:
-        stale = [ip for ip, attempts in _login_attempts.items() if all(now - t > 300 for t in attempts)]
-        for ip in stale:
-            del _login_attempts[ip]
-
-
-def _cleanup_sessions():
-    try:
-        db = load_panel_db()
-        sessions = db.get("sessions", {})
-        ttl = db.get("settings", {}).get("session_ttl", 86400)
-        now = time.time()
-        expired = [k for k, v in sessions.items() if now - v.get("created", 0) > ttl]
-        if expired:
-            for k in expired:
-                del sessions[k]
-            db["sessions"] = sessions
-            save_panel_db(db)
-    except Exception:
-        pass
+        # `interval` is initialised above the loop: an exception on the very first
+        # iteration must not kill the thread with a NameError here.
+        _shutdown_event.wait(interval)
 
 
 def start_health_thread():

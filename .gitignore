@@ -4,4 +4,9 @@ __pycache__/
 .env
 *.db
 panel.json
-tt-client-panel/
+panel.corrupt
+*.corrupt-*
+
+# The client panel is tracked, but its runtime state is not.
+tt-client-panel/net_history.json
+tt-client-panel/venv/

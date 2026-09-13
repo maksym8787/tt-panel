@@ -1,5 +1,8 @@
+import os
+import re
 import shutil
 import subprocess
+import threading
 import time
 from datetime import datetime
 from pathlib import Path
@@ -27,42 +30,89 @@ def get_cert_days_remaining():
     return None
 
 
+# Renewal stops the VPN and binds :80 — only one may run at a time, whether it
+# was triggered by the collector thread or by an operator hitting the button.
+_renew_lock = threading.Lock()
+
+_DOMAIN_RE = re.compile(r'^(?=.{1,253}$)[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?'
+                        r'(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$')
+
+
+def _install_cert_files(le_dir: Path) -> bool:
+    if not le_dir.exists():
+        return False
+    CERTS_DIR.mkdir(parents=True, exist_ok=True)
+    try:
+        os.chmod(str(CERTS_DIR), 0o700)
+    except OSError:
+        pass
+    shutil.copy2(str(le_dir / "fullchain.pem"), str(CERTS_DIR / "cert.pem"))
+    shutil.copy2(str(le_dir / "privkey.pem"), str(CERTS_DIR / "key.pem"))
+    try:
+        os.chmod(str(CERTS_DIR / "cert.pem"), 0o644)
+        os.chmod(str(CERTS_DIR / "key.pem"), 0o600)
+    except OSError:
+        pass
+    logger.info("Certs copied from %s to %s", le_dir, CERTS_DIR)
+    return True
+
+
+def _restart_panel_later():
+    """uvicorn loads the cert once at boot, so the panel must restart to serve the new one."""
+    def _later():
+        time.sleep(3)
+        try:
+            subprocess.run(["systemctl", "restart", "tt-admin"], timeout=30, capture_output=True)
+        except Exception as e:
+            logger.error("Failed to restart panel after cert renewal: %s", e)
+
+    threading.Thread(target=_later, daemon=True).start()
+
+
 def _do_cert_renewal(domain: str) -> dict:
     from services.reload import _log_restart
+    if not _DOMAIN_RE.match(domain or ""):
+        return {"ok": False, "message": "Invalid domain: %r" % domain}
     if not shutil.which("certbot"):
         return {"ok": False, "message": "certbot not installed. Run: apt install certbot"}
+    if not _renew_lock.acquire(blocking=False):
+        return {"ok": False, "message": "A certificate renewal is already running"}
+
     result = {"ok": False, "message": "Unknown error"}
     try:
-        subprocess.run(["systemctl", "stop", "trusttunnel"], timeout=10)
+        subprocess.run(["systemctl", "stop", "trusttunnel"], timeout=30, capture_output=True)
         time.sleep(2)
+        # No --force-renewal: certbot skips certs that are still fresh, which keeps
+        # us well clear of Let's Encrypt's duplicate-certificate rate limit.
         r2 = subprocess.run(
             ["certbot", "certonly", "--standalone", "-d", domain, "--non-interactive",
-             "--agree-tos", "--register-unsafely-without-email", "--force-renewal"],
-            capture_output=True, text=True, timeout=120
+             "--agree-tos", "--register-unsafely-without-email", "--keep-until-expiring"],
+            capture_output=True, text=True, timeout=180
         )
         if r2.returncode == 0:
-            le_dir = Path(f"/etc/letsencrypt/live/{domain}")
-            if le_dir.exists():
-                CERTS_DIR.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(str(le_dir / "fullchain.pem"), str(CERTS_DIR / "cert.pem"))
-                shutil.copy2(str(le_dir / "privkey.pem"), str(CERTS_DIR / "key.pem"))
-                logger.info("Certs copied from %s to %s", le_dir, CERTS_DIR)
+            installed = _install_cert_files(Path("/etc/letsencrypt/live/%s" % domain))
             _log_restart("cert_renewal")
-            result = {"ok": True, "message": "Certificate renewed and installed"}
+            result = {"ok": True, "message": "Certificate renewed and installed"
+                      if installed else "Certbot succeeded, but no certificate directory was found"}
         else:
-            logger.error("Certbot failed (rc=%d): %s", r2.returncode, r2.stderr[:500])
-            result = {"ok": False, "message": "Certbot error (rc=" + str(r2.returncode) + ")"}
+            logger.error("Certbot failed (rc=%d): %s", r2.returncode, (r2.stderr or "")[:500])
+            result = {"ok": False, "message": "Certbot error (rc=%d)" % r2.returncode}
+    except subprocess.TimeoutExpired:
+        result = {"ok": False, "message": "Certbot timed out"}
     except FileNotFoundError:
         result = {"ok": False, "message": "certbot not found in PATH"}
     except Exception as e:
         logger.error("Certificate renewal error: %s", e)
-        result = {"ok": False, "message": "Renewal failed: " + str(type(e).__name__)}
+        result = {"ok": False, "message": "Renewal failed: " + type(e).__name__}
     finally:
         try:
-            subprocess.run(["systemctl", "start", "trusttunnel"], timeout=10)
+            subprocess.run(["systemctl", "start", "trusttunnel"], timeout=30, capture_output=True)
             logger.info("TrustTunnel restarted after cert renewal")
         except Exception as e:
             logger.error("CRITICAL: Failed to restart TrustTunnel after cert renewal: %s", e)
+        _renew_lock.release()
+    if result["ok"]:
+        _restart_panel_later()
     return result
 
 

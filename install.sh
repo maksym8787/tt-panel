@@ -1,5 +1,9 @@
 #!/bin/bash
-set -e
+set -euo pipefail
+
+# Everything this script creates holds secrets (TLS key, VPN passwords, admin
+# hash), so default to owner-only permissions rather than the root umask's 0644.
+umask 077
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -51,7 +55,9 @@ if [ -z "$TIMEZONE" ]; then
 fi
 if [ -z "$TIMEZONE" ]; then TIMEZONE="Europe/Moscow"; fi
 
-TT_VERSION="1.0.17"
+TT_VERSION="${TT_VERSION:-1.1.0}"
+# AdGuard release signing key (see VERIFY_RELEASES.md in the TrustTunnel repo).
+TT_GPG_KEY="${TT_GPG_KEY:-28645AC9776EC4C00BCE2AFC0FE641E7235E2EC6}"
 TT_DIR="/opt/trusttunnel"
 PANEL_DIR="/opt/trusttunnel-panel"
 PANEL_REPO="https://github.com/maksym8787/tt-panel.git"
@@ -66,22 +72,58 @@ apt update
 apt install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" python3 python3-venv python3-pip certbot git curl openssl
 
 log "Creating directories..."
-mkdir -p $TT_DIR/certs $PANEL_DIR
+mkdir -p "$TT_DIR/certs" "$PANEL_DIR"
+chmod 700 "$TT_DIR/certs"
+chmod 750 "$TT_DIR"
+chmod 700 "$PANEL_DIR"
 
 if [ ! -f "$TT_DIR/trusttunnel_endpoint" ]; then
     log "Downloading TrustTunnel endpoint v${TT_VERSION}..."
     TT_URL="https://github.com/TrustTunnel/TrustTunnel/releases/download/v${TT_VERSION}/trusttunnel-v${TT_VERSION}-linux-x86_64.tar.gz"
     if curl -fSL "$TT_URL" -o /tmp/tt-endpoint.tar.gz; then
-        tar -xzf /tmp/tt-endpoint.tar.gz -C $TT_DIR
-        rm -f /tmp/tt-endpoint.tar.gz
-        if [ ! -f "$TT_DIR/trusttunnel_endpoint" ]; then
-            mv $TT_DIR/trusttunnel-*/trusttunnel_endpoint $TT_DIR/ 2>/dev/null || find $TT_DIR -name "trusttunnel_endpoint" -exec mv {} $TT_DIR/ \;
-            rm -rf $TT_DIR/trusttunnel-*/
+        # The project publishes no sha256 file; the real chain of trust is the
+        # AdGuard GPG signature shipped next to the binary inside the tarball.
+        if [ -n "${TT_SHA256:-}" ]; then
+            echo "${TT_SHA256}  /tmp/tt-endpoint.tar.gz" | sha256sum -c - \
+                || err "Checksum mismatch for the TrustTunnel release — refusing to install"
+            log "Checksum verified"
         fi
+
+        TT_EXTRACT="$(mktemp -d)"
+        tar -xzf /tmp/tt-endpoint.tar.gz -C "$TT_EXTRACT"
+        rm -f /tmp/tt-endpoint.tar.gz
+
+        TT_BIN_SRC="$(find "$TT_EXTRACT" -name trusttunnel_endpoint -type f | head -n1)"
+        [ -z "$TT_BIN_SRC" ] && err "trusttunnel_endpoint not found inside the release archive"
+
+        # Verify before the binary ever runs as root. Skip with TT_SKIP_GPG=1.
+        if [ "${TT_SKIP_GPG:-0}" != "1" ] && [ -f "${TT_BIN_SRC}.sig" ]; then
+            if command -v gpg >/dev/null 2>&1; then
+                if ! gpg --list-keys "$TT_GPG_KEY" >/dev/null 2>&1; then
+                    gpg --keyserver keys.openpgp.org --recv-key "$TT_GPG_KEY" >/dev/null 2>&1 \
+                        || warn "Could not fetch the AdGuard signing key from the keyserver"
+                fi
+                if gpg --verify "${TT_BIN_SRC}.sig" "$TT_BIN_SRC" >/dev/null 2>&1; then
+                    log "GPG signature verified (AdGuard)"
+                else
+                    rm -rf "$TT_EXTRACT"
+                    err "GPG signature verification FAILED — refusing to install. Override with TT_SKIP_GPG=1 if you accept the risk."
+                fi
+            else
+                warn "gpg not installed: the binary is unverified. apt install gnupg to enable verification."
+            fi
+        else
+            warn "No signature found next to the binary — installing unverified."
+        fi
+
+        mv "$TT_BIN_SRC" "$TT_DIR/trusttunnel_endpoint"
+        SW_SRC="$(find "$TT_EXTRACT" -name setup_wizard -type f | head -n1)"
+        [ -n "$SW_SRC" ] && mv "$SW_SRC" "$TT_DIR/setup_wizard" && chmod +x "$TT_DIR/setup_wizard"
+        rm -rf "$TT_EXTRACT"
     else
         warn "Download failed. Please manually place trusttunnel_endpoint binary at $TT_DIR/trusttunnel_endpoint"
         warn "Download from: https://github.com/TrustTunnel/TrustTunnel/releases"
-        read -p "Press Enter when file is in place..."
+        read -r -p "Press Enter when file is in place..." < /dev/tty || true
         [ ! -f "$TT_DIR/trusttunnel_endpoint" ] && err "Binary not found"
     fi
     chmod +x $TT_DIR/trusttunnel_endpoint
@@ -90,27 +132,45 @@ else
     log "TrustTunnel endpoint already exists, skipping download"
 fi
 
+install_certs() {
+    cp "$1/fullchain.pem" "$TT_DIR/certs/cert.pem"
+    cp "$1/privkey.pem" "$TT_DIR/certs/key.pem"
+    # cp does not preserve mode; the private key must never be world-readable.
+    chmod 644 "$TT_DIR/certs/cert.pem"
+    chmod 600 "$TT_DIR/certs/key.pem"
+}
+
+CERT_OK=0
 LE_DIR="/etc/letsencrypt/live/$DOMAIN"
 if [ -f "$LE_DIR/fullchain.pem" ] && [ -f "$LE_DIR/privkey.pem" ]; then
     log "Existing certificate found, reusing"
-    cp "$LE_DIR/fullchain.pem" "$TT_DIR/certs/cert.pem"
-    cp "$LE_DIR/privkey.pem" "$TT_DIR/certs/key.pem"
+    install_certs "$LE_DIR"
+    CERT_OK=1
 elif [ -f "$TT_DIR/certs/cert.pem" ] && [ -f "$TT_DIR/certs/key.pem" ]; then
     log "Certificates already in place, skipping"
+    chmod 600 "$TT_DIR/certs/key.pem" 2>/dev/null || true
+    CERT_OK=1
 else
     log "Obtaining SSL certificate for $DOMAIN..."
     systemctl stop trusttunnel 2>/dev/null || true
-    if certbot certonly --standalone -d "$DOMAIN" --non-interactive --agree-tos --register-unsafely-without-email; then
-        cp "$LE_DIR/fullchain.pem" "$TT_DIR/certs/cert.pem"
-        cp "$LE_DIR/privkey.pem" "$TT_DIR/certs/key.pem"
+    CERTBOT_EMAIL_ARG="--register-unsafely-without-email"
+    if [ -n "${LE_EMAIL:-}" ]; then
+        CERTBOT_EMAIL_ARG="--email ${LE_EMAIL}"
+    fi
+    if certbot certonly --standalone -d "$DOMAIN" --non-interactive --agree-tos $CERTBOT_EMAIL_ARG; then
+        install_certs "$LE_DIR"
         log "Certificate installed"
+        CERT_OK=1
     else
-        warn "Certbot failed. You can add certificates manually later:"
+        warn "Certbot failed. Add certificates manually, then restart tt-admin:"
         warn "  cp /path/to/cert.pem $TT_DIR/certs/cert.pem"
-        warn "  cp /path/to/key.pem $TT_DIR/certs/key.pem"
+        warn "  install -m 600 /path/to/key.pem $TT_DIR/certs/key.pem"
+        warn "Until then the panel listens on 127.0.0.1 only (it refuses to serve"
+        warn "a cleartext login publicly). Set LE_EMAIL=you@example.com to get"
+        warn "Let's Encrypt expiry notifications on the next run."
     fi
 fi
-log "Certificate ready"
+if [ "$CERT_OK" = "1" ]; then log "Certificate ready"; fi
 
 log "Writing TrustTunnel configuration..."
 cat > $TT_DIR/vpn.toml << TOMLEOF
@@ -185,10 +245,26 @@ TOMLEOF
 cat > $TT_DIR/rules.toml << 'TOMLEOF'
 TOMLEOF
 
-cat > $TT_DIR/credentials.toml << 'CREDEOF'
-CREDEOF
+if [ ! -f "$TT_DIR/credentials.toml" ]; then
+    : > "$TT_DIR/credentials.toml"
+fi
+# Holds every VPN password in cleartext.
+chmod 600 "$TT_DIR/credentials.toml"
+chmod 644 "$TT_DIR/vpn.toml" "$TT_DIR/hosts.toml" "$TT_DIR/rules.toml"
 
-log "Creating TrustTunnel systemd service..."
+# The panel's connection log / top-destinations come from lines the endpoint
+# emits at DEBUG only ("Successfully connected to ...", "Tunnel closed
+# gracefully"). Lowering this to info silently empties those views, so debug is
+# the default. Set TT_LOG_LEVEL=info to stop recording destinations and user
+# agents — accepting that the Monitor tab's connection log goes empty.
+# The endpoint accepts only: info | debug | trace.
+TT_LOG_LEVEL="${TT_LOG_LEVEL:-debug}"
+case "$TT_LOG_LEVEL" in
+    info|debug|trace) ;;
+    *) err "TT_LOG_LEVEL must be one of: info, debug, trace (got '$TT_LOG_LEVEL')" ;;
+esac
+
+log "Creating TrustTunnel systemd service (log level: $TT_LOG_LEVEL)..."
 cat > /etc/systemd/system/trusttunnel.service << EOF
 [Unit]
 Description=TrustTunnel endpoint
@@ -198,11 +274,28 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=$TT_DIR
-ExecStart=$TT_DIR/trusttunnel_endpoint vpn.toml hosts.toml -l debug
+ExecStart=$TT_DIR/trusttunnel_endpoint vpn.toml hosts.toml -l $TT_LOG_LEVEL
 ExecReload=/bin/kill -HUP \$MAINPID
 Restart=always
 RestartSec=3
 LimitNOFILE=65535
+
+# Hardening: the endpoint is internet-facing, so limit what a compromise reaches.
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=$TT_DIR /var/log
+ProtectHome=true
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+RestrictRealtime=true
+LockPersonality=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE CAP_NET_ADMIN CAP_NET_RAW
+AmbientCapabilities=CAP_NET_BIND_SERVICE CAP_NET_ADMIN CAP_NET_RAW
 
 [Install]
 WantedBy=multi-user.target
@@ -211,7 +304,13 @@ EOF
 log "Installing Admin Panel..."
 cd /tmp
 rm -rf tt-panel-install
-git clone "$PANEL_REPO" tt-panel-install || err "Failed to clone panel repo"
+# PANEL_REF pins a tag/commit; without it the default branch is deployed as-is.
+PANEL_REF="${PANEL_REF:-}"
+if [ -n "$PANEL_REF" ]; then
+    git clone --depth 1 --branch "$PANEL_REF" "$PANEL_REPO" tt-panel-install || err "Failed to clone panel repo at $PANEL_REF"
+else
+    git clone --depth 1 "$PANEL_REPO" tt-panel-install || err "Failed to clone panel repo"
+fi
 
 cp tt-panel-install/auth.py $PANEL_DIR/
 cp tt-panel-install/collector.py $PANEL_DIR/
@@ -245,6 +344,24 @@ ExecStart=$PANEL_DIR/venv/bin/python3 main.py
 Restart=always
 RestartSec=3
 Environment=PYTHONUNBUFFERED=1
+# Uncomment when running behind a TLS-terminating reverse proxy:
+# Environment=TT_BEHIND_PROXY=1
+# Disable third-party geolocation of client IPs:
+# Environment=TT_GEO_LOOKUP=0
+
+# Hardening. The panel still needs systemctl/certbot, so it stays root, but the
+# filesystem and kernel surface are cut down.
+ProtectHome=true
+ProtectSystem=full
+ReadWritePaths=$PANEL_DIR $TT_DIR /etc/letsencrypt /etc/systemd/system /etc/systemd/journald.conf.d /var/log
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
 
 [Install]
 WantedBy=multi-user.target
@@ -253,9 +370,13 @@ EOF
 log "Creating deploy script..."
 cat > $PANEL_DIR/deploy.sh << 'DEPLOYEOF'
 #!/bin/bash
+set -euo pipefail
+umask 077
 cd /tmp
 rm -rf tt-panel-deploy
-git clone https://github.com/maksym8787/tt-panel.git tt-panel-deploy 2>/dev/null
+# Fail loudly: silently continuing used to copy from a directory that never existed.
+git clone --depth 1 https://github.com/maksym8787/tt-panel.git tt-panel-deploy \
+    || { echo "Clone failed, keeping the current deployment" >&2; exit 1; }
 cp tt-panel-deploy/auth.py /opt/trusttunnel-panel/
 cp tt-panel-deploy/collector.py /opt/trusttunnel-panel/
 cp tt-panel-deploy/config.py /opt/trusttunnel-panel/
@@ -268,6 +389,9 @@ cp -r tt-panel-deploy/services /opt/trusttunnel-panel/
 cp -r tt-panel-deploy/static /opt/trusttunnel-panel/
 rm -rf /opt/trusttunnel-panel/__pycache__ /opt/trusttunnel-panel/frontend/__pycache__ /opt/trusttunnel-panel/routes/__pycache__ /opt/trusttunnel-panel/services/__pycache__
 rm -rf /tmp/tt-panel-deploy
+# panel.json holds the admin hash and VPN passwords; keep it owner-only.
+chmod 700 /opt/trusttunnel-panel
+chmod 600 /opt/trusttunnel-panel/panel.json 2>/dev/null || true
 systemctl restart tt-admin
 echo "Deployed at $(date)"
 DEPLOYEOF
@@ -314,8 +438,10 @@ systemctl restart systemd-journald
 systemctl start tt-admin
 
 log "Waiting for panel to start..."
+PANEL_URL="https://127.0.0.1:8443"
+if [ "$CERT_OK" != "1" ]; then PANEL_URL="http://127.0.0.1:8443"; fi
 for i in $(seq 1 30); do
-    if curl -sk "https://127.0.0.1:8443/api/auth-status" >/dev/null 2>&1; then
+    if curl -sk "${PANEL_URL}/api/auth-status" >/dev/null 2>&1; then
         break
     fi
     sleep 2
@@ -331,9 +457,17 @@ echo -e "  Panel:      ${CYAN}https://$DOMAIN:8443${NC}"
 echo -e "  TT Status:  $(systemctl is-active trusttunnel 2>/dev/null)"
 echo -e "  Panel:      $(systemctl is-active tt-admin 2>/dev/null)"
 echo ""
-echo -e "  ${YELLOW}1. Open the panel and create admin password${NC}"
+echo -e "  ${YELLOW}1. Open the panel and create admin password (min 12 chars)${NC}"
 echo -e "  ${YELLOW}2. Add a VPN user through the panel${NC}"
 echo -e "  ${YELLOW}3. TrustTunnel will start automatically${NC}"
+echo ""
+if [ "$CERT_OK" != "1" ]; then
+    warn "No TLS certificate: the panel is bound to 127.0.0.1 only."
+    warn "Reach it with: ssh -L 8443:127.0.0.1:8443 root@$DOMAIN"
+fi
+echo -e "  ${YELLOW}Recommended: restrict port 8443 to your own IP, e.g.${NC}"
+echo -e "    ${CYAN}ufw allow from <your-ip> to any port 8443 proto tcp${NC}"
+echo -e "    ${CYAN}ufw allow 443/tcp && ufw enable${NC}"
 echo ""
 echo -e "  Deploy updates:  ${CYAN}$PANEL_DIR/deploy.sh${NC}"
 echo ""

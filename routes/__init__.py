@@ -1,17 +1,42 @@
 from pathlib import Path
+from urllib.parse import urlsplit
 
-from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, Request, Response
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 
 import config
-from frontend import FRONTEND_HTML
+from frontend import FRONTEND_HTML, APP_JS, APP_CSS
 
 app = FastAPI(title="TrustTunnel Admin", docs_url=None, redoc_url=None)
 
 _static_dir = Path(__file__).parent.parent / "static"
 if _static_dir.is_dir():
     app.mount("/static", StaticFiles(directory=str(_static_dir)), name="static")
+
+_SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
+
+
+@app.middleware("http")
+async def csrf_guard(request: Request, call_next):
+    """Reject cross-site state-changing requests.
+
+    Session auth is cookie-based, so SameSite is the first line of defence; this
+    is the second. Requests carrying neither header (curl, scripts) are allowed —
+    browsers always send at least one of them on cross-origin requests.
+    """
+    if request.method not in _SAFE_METHODS:
+        site = request.headers.get("sec-fetch-site")
+        if site is not None:
+            if site not in ("same-origin", "none"):
+                return JSONResponse({"detail": "Cross-site request blocked"}, status_code=403)
+        else:
+            origin = request.headers.get("origin")
+            if origin:
+                host = request.headers.get("host", "")
+                if urlsplit(origin).netloc != host:
+                    return JSONResponse({"detail": "Cross-site request blocked"}, status_code=403)
+    return await call_next(request)
 
 
 @app.middleware("http")
@@ -24,12 +49,15 @@ async def security_headers(request: Request, call_next):
         response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline'; "
-        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
-        "font-src 'self' https://fonts.gstatic.com; "
+        "script-src 'self'; "
+        "style-src 'self'; "
+        "font-src 'self'; "
         "img-src 'self' data:; "
         "connect-src 'self'; "
-        "frame-ancestors 'none'"
+        "frame-ancestors 'none'; "
+        "base-uri 'none'; "
+        "form-action 'none'; "
+        "object-src 'none'"
     )
     return response
 
@@ -39,10 +67,20 @@ async def index():
     return FRONTEND_HTML
 
 
+@app.get("/app.js")
+async def app_js():
+    # Served as a file (rather than inlined) so the CSP can drop 'unsafe-inline'.
+    return Response(content=APP_JS, media_type="application/javascript; charset=utf-8")
+
+
+@app.get("/app.css")
+async def app_css():
+    return Response(content=APP_CSS, media_type="text/css; charset=utf-8")
+
+
 @app.get("/favicon.ico")
 async def favicon():
-    from fastapi.responses import FileResponse
-    fav = Path(__file__).parent.parent / "static" / "favicon.png"
+    fav = _static_dir / "favicon.png"
     if fav.exists():
         return FileResponse(str(fav), media_type="image/png")
     return Response(status_code=204)

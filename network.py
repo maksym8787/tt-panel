@@ -84,6 +84,31 @@ _geo_cache = {}
 GEO_TTL = 86400
 _geo_lock = threading.Lock()
 
+# Geolocation sends VPN client IPs to a third party. It can be turned off
+# (TT_GEO_LOOKUP=0) or pointed at a self-hosted/HTTPS instance (TT_GEO_BASE).
+import os as _os
+GEO_BASE = _os.environ.get("TT_GEO_BASE", "http://ip-api.com").rstrip("/")
+_GEO_FIELDS = "status,country,countryCode,city,isp,org,query"
+_EMPTY_GEO = {"country": "", "cc": "", "flag": "", "city": "", "isp": ""}
+_geo_warned = False
+
+
+def _geo_enabled() -> bool:
+    global _geo_warned
+    import config
+    if not getattr(config, "GEO_LOOKUP_ENABLED", True):
+        return False
+    if not _geo_warned:
+        _geo_warned = True
+        if GEO_BASE.startswith("http://"):
+            logger.warning(
+                "Geolocation is enabled and sends client IPs to %s over plaintext HTTP. "
+                "Set TT_GEO_LOOKUP=0 to disable it, or TT_GEO_BASE to an HTTPS/self-hosted provider.",
+                GEO_BASE)
+        else:
+            logger.info("Geolocation provider: %s", GEO_BASE)
+    return True
+
 
 def _cc_to_flag(cc: str) -> str:
     if not cc or len(cc) != 2:
@@ -109,6 +134,8 @@ def _is_private(ip: str) -> bool:
 def geo_lookup(ip: str) -> dict:
     if _is_private(ip):
         return {"country": "Local", "cc": "", "flag": "", "city": "", "isp": "Local"}
+    if not _geo_enabled():
+        return dict(_EMPTY_GEO)
     now = time.time()
     with _geo_lock:
         cached = _geo_cache.get(ip)
@@ -116,7 +143,7 @@ def geo_lookup(ip: str) -> dict:
             return cached
     try:
         safe_ip = urllib.parse.quote(ip, safe='')
-        url = f"http://ip-api.com/json/{safe_ip}?fields=status,country,countryCode,city,isp,org"
+        url = f"{GEO_BASE}/json/{safe_ip}?fields={_GEO_FIELDS}"
         req = urllib.request.Request(url, headers={"User-Agent": "TrustTunnel-Admin/1.0"})
         with urllib.request.urlopen(req, timeout=3) as resp:
             data = json.loads(resp.read().decode())
@@ -148,6 +175,9 @@ def geo_lookup_batch(ips: list) -> dict:
     now = time.time()
     results = {}
     to_fetch = []
+    if not _geo_enabled():
+        return {ip: ({"country": "Local", "cc": "", "flag": "", "city": "", "isp": "Local"}
+                     if _is_private(ip) else dict(_EMPTY_GEO)) for ip in ips}
     for ip in ips:
         if _is_private(ip):
             results[ip] = {"country": "Local", "cc": "", "flag": "", "city": "", "isp": "Local"}
@@ -164,11 +194,11 @@ def geo_lookup_batch(ips: list) -> dict:
         batch = to_fetch[batch_start:batch_start + 100]
         try:
             payload = json.dumps([
-                {"query": ip, "fields": "status,country,countryCode,city,isp,org,query"}
+                {"query": ip, "fields": _GEO_FIELDS}
                 for ip in batch
             ]).encode()
             req = urllib.request.Request(
-                "http://ip-api.com/batch",
+                GEO_BASE + "/batch",
                 data=payload,
                 headers={"Content-Type": "application/json", "User-Agent": "TrustTunnel-Admin/1.0"},
                 method="POST",

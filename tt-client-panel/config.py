@@ -40,4 +40,21 @@ TUN_IF = _validate_iface(os.environ.get("TT_TUN_IF", "tun0"))
 LAN_GATEWAY = _validate_ip_net(os.environ.get("TT_LAN_GATEWAY", "10.10.9.1"))
 LAN_NETWORK = _validate_ip_net(os.environ.get("TT_LAN_NETWORK", "10.10.0.0/16"))
 
+CERTS_DIR = Path(os.environ.get("TT_CLIENT_CERTS_DIR", str(PANEL_DIR / "certs")))
+
+
+def _env_flag(name: str, default: bool = False) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in ("1", "true", "yes", "on")
+
+
+# Defaults to loopback: this panel usually runs on a LAN gateway, and without TLS
+# a public bind would put the admin password on the wire in cleartext.
+PANEL_HOST = os.environ.get("TT_CLIENT_PANEL_HOST", "127.0.0.1")
+BEHIND_PROXY = _env_flag("TT_BEHIND_PROXY")
+ALLOW_INSECURE_HTTP = _env_flag("TT_ALLOW_INSECURE_HTTP")
+
+_ssl_configured = False
 _shutdown_event = threading.Event()

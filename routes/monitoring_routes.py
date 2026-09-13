@@ -5,10 +5,10 @@ from datetime import datetime
 from fastapi import Request
 
 from auth import require_auth
-from collector import fetch_live_metrics
+from collector import fetch_live_metrics, fetch_client_stats, clients_available
 from config import STATS_DB, LOG_FILE
 from database import get_db
-from network import rdns_lookup_cached, geo_lookup, enrich_with_geo
+from network import rdns_lookup_cached, enrich_with_geo
 from services import (
     parse_credentials, get_service_status, get_cert_days_remaining,
     get_server_ip, get_vps_resources, get_domain, is_reload_pending,
@@ -18,6 +18,8 @@ from routes import app
 
 _status_cache = {"data": None, "ts": 0}
 _STATUS_TTL = 10
+# How recently an IP must have connected to count as "online".
+ONLINE_WINDOW = 900
 
 
 @app.get("/api/active-ips")
@@ -46,9 +48,11 @@ async def active_ips(request: Request):
     ips = await asyncio.to_thread(_query)
 
     def _enrich():
-        for ip, info in ips.items():
-            geo = geo_lookup(ip)
-            info["geo"] = {k: v for k, v in geo.items() if k != "_ts"}
+        # One batched lookup instead of a serial request per IP.
+        items = [dict(info, ip=ip) for ip, info in ips.items()]
+        enrich_with_geo(items, "ip")
+        for item in items:
+            ips[item["ip"]]["geo"] = item.get("geo", {})
         return ips
 
     ips = await asyncio.to_thread(_enrich)
@@ -121,10 +125,12 @@ async def monitoring_history(request: Request, hours: int = 24):
 @app.get("/api/monitoring/traffic")
 async def monitoring_traffic(request: Request, days: int = 0, hours: int = 0):
     await require_auth(request)
+    # Same ceiling as the other monitoring endpoints, so the UI's "1y" period
+    # doesn't silently come back with only 30 days of traffic.
     if hours > 0:
-        since_sec = max(1, min(hours, 720)) * 3600
+        since_sec = max(1, min(hours, 8760)) * 3600
     elif days > 0:
-        since_sec = max(1, min(days, 30)) * 86400
+        since_sec = max(1, min(days, 365)) * 86400
     else:
         since_sec = 7 * 86400
 
@@ -159,31 +165,17 @@ async def monitoring_connections(request: Request, hours: int = 24, limit: int =
             raw_dst = c.fetchall()
             c.execute("SELECT DISTINCT client_ip FROM connections WHERE ts > ? AND client_ip IS NOT NULL", (since,))
             unique_ips = [r[0] for r in c.fetchall()]
-            c.execute("""SELECT client_ip, COUNT(*) as cnt, MAX(ts) as last_seen,
-                GROUP_CONCAT(DISTINCT user_agent) as agents
-                FROM connections WHERE ts > ? AND client_ip IS NOT NULL AND event='connect'
-                GROUP BY client_ip ORDER BY cnt DESC LIMIT 20""", (since,))
-            per_client = [{"ip": r[0], "connections": r[1], "last_seen": r[2],
-                          "user_agent": (r[3] or "").split(",")[0]} for r in c.fetchall()]
         domain_counts = {}
         for dst, cnt in raw_dst:
             resolved = rdns_lookup_cached(dst) if dst else dst
             domain = resolved.split(":")[0] if resolved else dst
             domain_counts[domain] = domain_counts.get(domain, 0) + cnt
-        top_dst = sorted(domain_counts.items(), key=lambda x: -x[1])[:20]
-        top_dst = [{"dst": d, "count": ct} for d, ct in top_dst]
-        port_counts = {}
-        for dst, cnt in raw_dst:
-            port = dst.split(":")[-1] if dst and ":" in dst else "?"
-            port_counts[port] = port_counts.get(port, 0) + cnt
-        top_ports = sorted(port_counts.items(), key=lambda x: -x[1])[:10]
-        top_ports = [{"port": p, "count": ct} for p, ct in top_ports]
-        return rows, top_dst, unique_ips, per_client, top_ports
+        top_dst = [{"dst": d, "count": ct}
+                   for d, ct in sorted(domain_counts.items(), key=lambda x: -x[1])[:20]]
+        return rows, top_dst, unique_ips
 
-    rows, top_dst, unique_ips, per_client, top_ports = await asyncio.to_thread(_query)
-    per_client = await asyncio.to_thread(enrich_with_geo, per_client, "ip")
-    return {"connections": rows, "top_destinations": top_dst, "unique_ips": unique_ips,
-            "per_client": per_client, "top_ports": top_ports}
+    rows, top_dst, unique_ips = await asyncio.to_thread(_query)
+    return {"connections": rows, "top_destinations": top_dst, "unique_ips": unique_ips}
 
 
 @app.get("/api/monitoring/conn-timeline")
@@ -217,7 +209,10 @@ async def monitoring_online(request: Request):
     live_sessions = live.get("client_sessions", 0)
 
     def _query():
-        since = int(time.time()) - 1800
+        # TrustTunnel's disconnect log lines carry only a client id, never the
+        # client IP, so a connect/disconnect pairing per IP is not possible.
+        # "Online" therefore means: this IP opened a connection very recently.
+        since = int(time.time()) - ONLINE_WINDOW
         since_1h = int(time.time()) - 3600
         with get_db() as conn:
             conn.execute("PRAGMA busy_timeout=5000")
@@ -227,10 +222,8 @@ async def monitoring_online(request: Request):
                        GROUP_CONCAT(DISTINCT user_agent) as agents,
                        GROUP_CONCAT(DISTINCT destination) as dests
                 FROM connections
-                WHERE ts > ? AND client_ip IS NOT NULL
+                WHERE ts > ? AND client_ip IS NOT NULL AND event='connect'
                 GROUP BY client_ip
-                HAVING MAX(CASE WHEN event='connect' OR event='tunnel' THEN ts ELSE 0 END) >=
-                       MAX(CASE WHEN event='disconnect' THEN ts ELSE 0 END)
                 ORDER BY last_seen DESC
             """, (since,))
             users = []
@@ -320,6 +313,58 @@ async def monitoring_summary(request: Request):
         }
 
     return await asyncio.to_thread(_query)
+
+
+@app.get("/api/monitoring/per-user")
+async def monitoring_per_user(request: Request, hours: int = 24):
+    """Per-user traffic and sessions from the endpoint's /clients data.
+
+    Returns available=false when per_client_metrics is off, so the UI can
+    explain how to turn it on instead of showing an empty table.
+    """
+    await require_auth(request)
+    hours = max(1, min(hours, 8760))
+    live = await asyncio.to_thread(fetch_client_stats)
+    available = clients_available()
+
+    def _query():
+        since = int(time.time()) - hours * 3600
+        with get_db() as conn:
+            conn.execute("PRAGMA busy_timeout=5000")
+            c = conn.cursor()
+            c.execute("""
+                SELECT username,
+                       SUM(inbound_bytes), SUM(outbound_bytes),
+                       MAX(sessions_max), MAX(last_seen)
+                FROM client_usage_hourly
+                WHERE hour_ts >= ?
+                GROUP BY username
+            """, (since,))
+            return {r[0]: {"inbound": r[1] or 0, "outbound": r[2] or 0,
+                           "peak_sessions": r[3] or 0, "last_seen": r[4] or 0}
+                    for r in c.fetchall()}
+
+    history = await asyncio.to_thread(_query)
+
+    users = {}
+    for username, agg in history.items():
+        users[username] = dict(agg, username=username, sessions=0, ip=None)
+    for entry in (live or []):
+        username = entry.get("username")
+        if not username:
+            continue
+        row = users.setdefault(username, {"username": username, "inbound": 0, "outbound": 0,
+                                          "peak_sessions": 0, "last_seen": 0})
+        row["sessions"] = int(entry.get("sessions") or 0)
+        row["ip"] = entry.get("ip")
+        row["total_inbound"] = int(entry.get("inbound") or 0)
+        row["total_outbound"] = int(entry.get("outbound") or 0)
+
+    rows = sorted(users.values(),
+                  key=lambda u: (u.get("inbound", 0) + u.get("outbound", 0)), reverse=True)
+    if rows:
+        await asyncio.to_thread(enrich_with_geo, rows, "ip")
+    return {"available": bool(available), "hours": hours, "users": rows}
 
 
 @app.get("/api/monitoring/db-size")

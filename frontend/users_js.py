@@ -1,4 +1,20 @@
 USERS_JS = r'''
+// Fetch + blob instead of a navigation, so an expired session shows the login
+// screen rather than dumping raw JSON over the panel.
+async function exportUsersCsv(btn){
+  await withLoading(btn,async function(){
+    try{
+      var r=await fetch(A+'/users/export',{credentials:'same-origin'});
+      if(r.status===401){onUnauthorized();return}
+      if(!r.ok)throw new Error('HTTP '+r.status);
+      var blob=await r.blob();
+      var url=URL.createObjectURL(blob);
+      var a=document.createElement('a');
+      a.href=url;a.download='users.csv';document.body.appendChild(a);a.click();
+      document.body.removeChild(a);
+      setTimeout(function(){URL.revokeObjectURL(url)},1000);
+    }catch(e){toast(e.message,true)}})}
+
 function sortUsers(list){
   var s=S.userSort;var sorted=list.slice();
   sorted.sort(function(a,b){
@@ -22,7 +38,7 @@ function renderUsers(){
         h('select',{className:'input',style:{maxWidth:'160px',padding:'6px 8px',fontSize:'11px'},value:S.userSort,onChange:function(e){S.userSort=e.target.value;R()}},sortOpts.map(function(o){return h('option',{value:o.v},o.l)})),
         h('input',{className:'input',placeholder:t('search_users'),style:{maxWidth:'200px',padding:'6px 12px',fontSize:'12px'},id:'user-search',value:S.userFilter||'',onInput:function(e){S.userFilter=e.target.value;R()}}),
         h('button',{className:'btn btn-p btn-sm',onClick:function(){S.modal={t:'add'};R()}},t('add_user')),
-        h('button',{className:'btn btn-sm',onClick:function(){window.location.href=A+'/users/export'}},t('export_csv')),
+        h('button',{className:'btn btn-sm',onClick:function(e){exportUsersCsv(e.currentTarget)}},t('export_csv')),
         h('button',{className:'btn btn-sm',onClick:function(){var inp=document.createElement('input');inp.type='file';inp.accept='.csv';inp.onchange=function(){if(!inp.files[0])return;var rd=new FileReader();rd.onload=function(){api('/users/import',{method:'POST',body:JSON.stringify({csv:rd.result})}).then(function(d){toast(t('import_success').replace('{count}',d.added||0));loadDash()}).catch(function(e){toast(t('import_error')+': '+e.message,true)})};rd.readAsText(inp.files[0])};inp.click()}},t('import_csv')))),
     aipCount?h('div',{className:'card',style:{marginBottom:'14px'}},
       h('div',{className:'card-t'},h('span',null,aipCount+' '+(aipCount!==1?t('active_ips'):t('active_ip')))),
@@ -35,13 +51,13 @@ function renderUsers(){
 function renderUserCard(u){var dis=u.enabled===false;var created=u.created_at?u.created_at.replace('T',' ').substring(0,16):'';var uNote=S.userNotes[u.username];
   return h('div',{className:'uc'+(dis?' uc-dis':'')},
   h('div',{className:'ui'},
-    h('div',{className:'ua'+(dis?' ua-dis':'')},u.username[0].toUpperCase()),
+    h('div',{className:'ua'+(dis?' ua-dis':'')},(u.username||'?').charAt(0).toUpperCase()),
     h('div',null,
       h('div',{style:{display:'flex',alignItems:'center',gap:'6px'}},
         h('span',{className:'un'+(dis?' un-dis':'')},u.username),
         dis?h('span',{className:'badge b-rd',style:{fontSize:'9px'}},t('user_disabled')):null),
       created?h('div',{style:{fontSize:'10px',color:'var(--tx3)',marginTop:'1px'}},t('created_label')+': '+created):null,
-      h('div',{style:{display:'flex',alignItems:'center',gap:'4px',marginTop:'3px',cursor:'pointer'},title:t('note'),onClick:function(){var txt=prompt(t('note_placeholder'),uNote||'');if(txt!==null){api('/users/'+u.username+'/note',{method:'PUT',body:JSON.stringify({note:txt})}).then(function(){S.userNotes[u.username]=txt||undefined;if(!txt)delete S.userNotes[u.username];toast(t('note_saved'));R()}).catch(function(e){toast(e.message,true)})}}},
+      h('div',{style:{display:'flex',alignItems:'center',gap:'4px',marginTop:'3px',cursor:'pointer'},title:t('note'),onClick:function(){var txt=prompt(t('note_placeholder'),uNote||'');if(txt!==null){api('/users/'+enc(u.username)+'/note',{method:'PUT',body:JSON.stringify({note:txt})}).then(function(){S.userNotes[u.username]=txt||undefined;if(!txt)delete S.userNotes[u.username];toast(t('note_saved'));R()}).catch(function(e){toast(e.message,true)})}}},
         h('span',{style:{fontSize:'11px',color:'var(--tx3)'}},'\u270F\uFE0F'),
         h('span',{style:{fontSize:'10px',color:uNote?'var(--tx2)':'var(--tx3)',fontStyle:'italic'}},uNote||t('note_placeholder'))),
       u.password?h('div',{style:{display:'flex',alignItems:'center',gap:'6px',marginTop:'2px'}},

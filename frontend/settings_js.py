@@ -1,5 +1,7 @@
 SETTINGS_JS = r'''
-var _vpnEdits={};
+// Pending edits are kept per TOML section so nothing leaks into `core` on save.
+var _vpnEdits={core:{},http2:{},quic:{},metrics:{},forward:null,socks5_address:null};
+function _resetVpnEdits(){_vpnEdits={core:{},http2:{},quic:{},metrics:{},forward:null,socks5_address:null}}
 var _rulesEdits=null;
 var _settingsExpand={protocol:false,rawToml:false};
 function tip(key){var text=t('tip_'+key);if(!text||text===('tip_'+key))return null;
@@ -11,7 +13,9 @@ function tip(key){var text=t('tip_'+key);if(!text||text===('tip_'+key))return nu
   icon.addEventListener('touchstart',function(e){e.preventDefault();popup.style.display=popup.style.display==='none'?'block':'none'});
   wrap.appendChild(icon);wrap.appendChild(popup);return wrap}
 function _setVpnEdit(section,key,val){
-  if(section){if(!_vpnEdits[section])_vpnEdits[section]={};_vpnEdits[section][key]=val}else{_vpnEdits[key]=val}
+  var bucket=section||'core';
+  if(!_vpnEdits[bucket])_vpnEdits[bucket]={};
+  _vpnEdits[bucket][key]=val
 }
 function settingToggle(obj,key,label,tipKey,section){
   return h('div',{style:{display:'flex',alignItems:'center',gap:'6px'}},
@@ -32,18 +36,19 @@ function settingText(obj,key,label,wide,tipKey,section){
     h('input',{className:'input',type:'text',style:{width:wide?'100%':'200px',padding:'4px 8px',fontSize:'12px'},value:String(obj[key]||''),onInput:function(e){obj[key]=e.target.value;_setVpnEdit(section,key,e.target.value)}}))
 }
 function renderSettings(){
-  var s=S.settings;if(!s.vpn_toml&&s.vpn_toml!==''){loadSettings();return h('div',{className:'tab-content'},h('div',{className:'skeleton skel-card'}),h('div',{className:'skeleton skel-card'}))}
+  // Loading is triggered by the tab switch, never from the render path.
+  var s=S.settings;if(!s.vpn_toml&&s.vpn_toml!==''){return h('div',{className:'tab-content'},h('div',{className:'skeleton skel-card'}),h('div',{className:'skeleton skel-card'}))}
   var va,ra;var ps=S.panelSettings||{};
   var ttlOpts=[{v:300,l:'5 '+t('minutes')},{v:900,l:'15 '+t('minutes')},{v:1800,l:'30 '+t('minutes')},{v:3600,l:'1h'},{v:14400,l:'4h'},{v:43200,l:'12h'},{v:86400,l:'24h'}];
   var renewOn=ps.auto_renew_enabled!==false;
   var ss=S.structuredSettings;
   var vpnData=ss&&ss.vpn?ss.vpn:{};
-  var vpn=Object.assign({},vpnData.core||{},_vpnEdits);
-  var http2=Object.assign({},vpnData.http2||{},_vpnEdits._http2||{});
-  var quic=Object.assign({},vpnData.quic||{},_vpnEdits._quic||{});
-  var metrics=Object.assign({},vpnData.metrics||{},_vpnEdits._metrics||{});
-  var forward=_vpnEdits._forward||(vpnData.forward||'direct');
-  var socks5Addr=_vpnEdits._socks5_address!=null?_vpnEdits._socks5_address:(vpnData.socks5_address||'');
+  var vpn=Object.assign({},vpnData.core||{},_vpnEdits.core);
+  var http2=Object.assign({},vpnData.http2||{},_vpnEdits.http2);
+  var quic=Object.assign({},vpnData.quic||{},_vpnEdits.quic);
+  var metrics=Object.assign({},vpnData.metrics||{},_vpnEdits.metrics);
+  var forward=_vpnEdits.forward||(vpnData.forward||'direct');
+  var socks5Addr=_vpnEdits.socks5_address!=null?_vpnEdits.socks5_address:(vpnData.socks5_address||'');
   var rules=ss&&ss.rules?ss.rules.slice():[];
   if(_rulesEdits)rules=_rulesEdits;
   var hostsData=ss&&ss.hosts?ss.hosts:{};
@@ -78,22 +83,22 @@ function renderSettings(){
     sections.push(h('div',{className:'card'},
       h('div',{className:'card-t',style:{display:'flex',justifyContent:'space-between',alignItems:'center'}},
         h('span',null,t('vpn_settings')),
-        h('button',{className:'btn btn-sm btn-p',onClick:function(){
+        h('button',{className:'btn btn-sm btn-p',onClick:function(e){withLoading(e.currentTarget,function(){
           var payload={core:Object.assign({},vpn),http2:Object.assign({},http2),quic:Object.assign({},quic),metrics:Object.assign({},metrics),forward:forward,socks5_address:socks5Addr};
-          api('/settings/vpn',{method:'PUT',body:JSON.stringify(payload)}).then(function(){_vpnEdits={};toast(t('settings_saved'));loadSettings()}).catch(function(er){toast(er.message,true)})}},t('save_vpn'))),
+          return api('/settings/vpn',{method:'PUT',body:JSON.stringify(payload)}).then(function(){_resetVpnEdits();toast(t('settings_saved'));return loadSettings()}).catch(function(er){toast(er.message,true)})})}},t('save_vpn'))),
       h('div',{style:{fontSize:'10px',color:'var(--tx3)',marginBottom:'10px'}},t('apply_after_save')),
       h('div',{style:{display:'flex',gap:'12px',flexWrap:'wrap',marginBottom:'12px'}},
         settingText(vpn,'listen_address',t('listen_addr'),true,'listen_address'),
         h('div',{style:{marginBottom:'8px'}},
           h('div',{style:{fontSize:'10px',color:'var(--tx3)',marginBottom:'3px'}},t('auth_code')),
-          h('select',{className:'input',style:{padding:'4px 8px',fontSize:'12px'},value:String(vpn.auth_failure_status_code||407),onChange:function(e){vpn.auth_failure_status_code=parseInt(e.target.value);_vpnEdits.auth_failure_status_code=vpn.auth_failure_status_code}},
+          h('select',{className:'input',style:{padding:'4px 8px',fontSize:'12px'},value:String(vpn.auth_failure_status_code||407),onChange:function(e){vpn.auth_failure_status_code=parseInt(e.target.value);_setVpnEdit(null,'auth_failure_status_code',vpn.auth_failure_status_code)}},
             h('option',{value:'407'},'407'),h('option',{value:'405'},'405')))),
       h('div',{style:{display:'flex',gap:'16px',flexWrap:'wrap',marginBottom:'14px'}},
         settingToggle(vpn,'ipv6_available',t('ipv6'),'ipv6_available',null),
         settingToggle(vpn,'allow_private_network_connections',t('allow_private'),'allow_private',null),
         settingToggle(vpn,'speedtest_enable',t('speedtest'),'speedtest',null),
         settingToggle(vpn,'ping_enable',t('ping'),'ping',null)),
-      h('div',{style:{fontSize:'11px',fontWeight:'600',color:'var(--tx2)',marginBottom:'8px'}},'Timeouts'),
+      h('div',{style:{fontSize:'11px',fontWeight:'600',color:'var(--tx2)',marginBottom:'8px'}},t('timeouts')),
       h('div',{className:'grid grid3',style:{gap:'8px'}},
         settingNumber(vpn,'tls_handshake_timeout_secs',t('timeout_tls'),t('seconds'),1,120,'timeout_tls',null),
         settingNumber(vpn,'client_listener_timeout_secs',t('timeout_listener'),t('seconds'),10,86400,'timeout_listener',null),
@@ -107,37 +112,39 @@ function renderSettings(){
       protoOpen?h('div',{className:'grid grid2',style:{gap:'16px'}},
         h('div',null,
           h('div',{style:{fontSize:'11px',fontWeight:'600',color:'var(--tx2)',marginBottom:'8px'}},t('http2_settings')),
-          settingNumber(http2,'max_concurrent_streams',t('max_streams'),null,1,100000,'max_streams','_http2'),
-          settingNumber(http2,'max_frame_size',t('frame_size'),null,16384,16777215,'frame_size','_http2'),
-          settingNumber(http2,'header_table_size',t('header_table'),null,0,1048576,'header_table','_http2'),
-          settingNumber(http2,'initial_connection_window_size',t('conn_window'),null,65535,2147483647,'conn_window','_http2'),
-          settingNumber(http2,'initial_stream_window_size',t('stream_window'),null,65535,2147483647,'stream_window','_http2')),
+          settingNumber(http2,'max_concurrent_streams',t('max_streams'),null,1,100000,'max_streams','http2'),
+          settingNumber(http2,'max_frame_size',t('frame_size'),null,16384,16777215,'frame_size','http2'),
+          settingNumber(http2,'header_table_size',t('header_table'),null,0,1048576,'header_table','http2'),
+          settingNumber(http2,'initial_connection_window_size',t('conn_window'),null,65535,2147483647,'conn_window','http2'),
+          settingNumber(http2,'initial_stream_window_size',t('stream_window'),null,65535,2147483647,'stream_window','http2')),
         h('div',null,
           h('div',{style:{fontSize:'11px',fontWeight:'600',color:'var(--tx2)',marginBottom:'8px'}},t('quic_settings')),
-          settingNumber(quic,'initial_max_streams_bidi',t('max_streams')+' (bidi)',null,1,100000,'max_streams','_quic'),
-          settingNumber(quic,'initial_max_streams_uni',t('max_streams')+' (uni)',null,1,100000,'max_streams','_quic'),
-          settingNumber(quic,'recv_udp_payload_size','Recv payload',null,1200,65535,null,'_quic'),
-          settingNumber(quic,'send_udp_payload_size','Send payload',null,1200,65535,null,'_quic'),
-          settingNumber(quic,'initial_max_data',t('conn_window'),null,1048576,1073741824,'conn_window','_quic'))):null));
+          settingNumber(quic,'initial_max_streams_bidi',t('max_streams')+' (bidi)',null,1,100000,'max_streams','quic'),
+          settingNumber(quic,'initial_max_streams_uni',t('max_streams')+' (uni)',null,1,100000,'max_streams','quic'),
+          settingNumber(quic,'recv_udp_payload_size',t('recv_payload'),null,1200,65535,null,'quic'),
+          settingNumber(quic,'send_udp_payload_size',t('send_payload'),null,1200,65535,null,'quic'),
+          settingNumber(quic,'initial_max_data',t('conn_window'),null,1048576,1073741824,'conn_window','quic'))):null));
     sections.push(h('div',{className:'card'},
       h('div',{className:'card-t'},t('metrics_settings')),
       h('div',{style:{display:'flex',gap:'12px',flexWrap:'wrap'}},
-        settingText(metrics,'address',t('metrics_addr'),true,'metrics_addr','_metrics'),
-        settingNumber(metrics,'request_timeout_secs',t('metrics_timeout'),t('seconds'),1,60,'metrics_timeout','_metrics'))));
+        settingText(metrics,'address',t('metrics_addr'),true,'metrics_addr','metrics'),
+        settingNumber(metrics,'request_timeout_secs',t('metrics_timeout'),t('seconds'),1,60,'metrics_timeout','metrics')),
+      h('div',{style:{marginTop:'10px'}},
+        settingToggle(metrics,'per_client_metrics',t('per_client_metrics'),'per_client_metrics','metrics'))));
     sections.push(h('div',{className:'card'},
       h('div',{className:'card-t'},t('routing')),
       h('div',{style:{display:'flex',alignItems:'center',gap:'12px'}},
-        h('button',{className:'btn btn-xs'+((forward==='direct')?' btn-p':''),onClick:function(){_vpnEdits._forward='direct';_vpnEdits._socks5_address='';R()}},t('direct')),
-        h('button',{className:'btn btn-xs'+((forward==='socks5')?' btn-p':''),onClick:function(){_vpnEdits._forward='socks5';_vpnEdits._socks5_address=socks5Addr||'127.0.0.1:1080';R();}},t('socks5')),
-        forward==='socks5'?h('input',{className:'input',type:'text',style:{width:'200px',padding:'4px 8px',fontSize:'12px'},value:socks5Addr,onChange:function(e){_vpnEdits._socks5_address=e.target.value}}):null)));
+        h('button',{className:'btn btn-xs'+((forward==='direct')?' btn-p':''),onClick:function(){_vpnEdits.forward='direct';_vpnEdits.socks5_address='';R()}},t('direct')),
+        h('button',{className:'btn btn-xs'+((forward==='socks5')?' btn-p':''),onClick:function(){_vpnEdits.forward='socks5';_vpnEdits.socks5_address=socks5Addr||'127.0.0.1:1080';R();}},t('socks5')),
+        forward==='socks5'?h('input',{className:'input',type:'text',style:{width:'200px',padding:'4px 8px',fontSize:'12px'},value:socks5Addr,onInput:function(e){_vpnEdits.socks5_address=e.target.value}}):null)));
     sections.push(h('div',{className:'card'},
       h('div',{className:'card-t',style:{display:'flex',justifyContent:'space-between',alignItems:'center'}},
         h('span',null,t('rules_settings')),
         h('div',{style:{display:'flex',gap:'6px'}},
           h('button',{className:'btn btn-xs',onClick:function(){if(!_rulesEdits)_rulesEdits=rules.slice();_rulesEdits.push({cidr:'',client_random_prefix:'',action:'deny'});R()}},t('add_rule')),
-          h('button',{className:'btn btn-sm btn-p',onClick:function(){var payload=_rulesEdits||rules;api('/settings/rules',{method:'PUT',body:JSON.stringify({rules:payload})}).then(function(){_rulesEdits=null;toast(t('settings_saved'));loadSettings()}).catch(function(er){toast(er.message,true)})}},t('save_rules')))),
+          h('button',{className:'btn btn-sm btn-p',onClick:function(e){withLoading(e.currentTarget,function(){var payload=_rulesEdits||rules;return api('/settings/rules',{method:'PUT',body:JSON.stringify({rules:payload})}).then(function(){_rulesEdits=null;toast(t('settings_saved'));return loadSettings()}).catch(function(er){toast(er.message,true)})})}},t('save_rules')))),
       rules.length?h('table',{className:'tbl'},
-        h('thead',null,h('tr',null,h('th',null,t('cidr')),h('th',null,'Client Random'),h('th',null,t('action')),h('th',{style:{width:'60px'}},t('delete')))),
+        h('thead',null,h('tr',null,h('th',null,t('cidr')),h('th',null,t('client_random')),h('th',null,t('action')),h('th',{style:{width:'60px'}},t('delete')))),
         h('tbody',null,rules.map(function(r,i){return h('tr',null,
           h('td',null,h('input',{className:'input',type:'text',style:{width:'100%',padding:'3px 6px',fontSize:'11px'},value:r.cidr||'',onChange:function(e){if(!_rulesEdits)_rulesEdits=rules.slice();_rulesEdits[i]=Object.assign({},_rulesEdits[i],{cidr:e.target.value})}})),
           h('td',null,h('input',{className:'input',type:'text',style:{width:'100%',padding:'3px 6px',fontSize:'11px'},value:r.client_random_prefix||'',onChange:function(e){if(!_rulesEdits)_rulesEdits=rules.slice();_rulesEdits[i]=Object.assign({},_rulesEdits[i],{client_random_prefix:e.target.value})}})),
@@ -162,11 +169,11 @@ function renderSettings(){
       h('div',{style:{marginBottom:'12px'}},
         h('div',{style:{fontSize:'11px',fontWeight:'600',color:'var(--tx2)',marginBottom:'6px'}},'vpn.toml'),
         va=h('textarea',{className:'input input-m',style:{minHeight:'200px'}},s.vpn_toml||''),
-        h('button',{className:'btn btn-sm',style:{marginTop:'10px'},onClick:function(){saveCfg('vpn_toml',va.value)}},t('save'))),
+        h('button',{className:'btn btn-sm',style:{marginTop:'10px'},onClick:function(e){saveCfg('vpn_toml',va.value,e.currentTarget)}},t('save'))),
       h('div',{style:{marginBottom:'12px'}},
         h('div',{style:{fontSize:'11px',fontWeight:'600',color:'var(--tx2)',marginBottom:'6px'}},'rules.toml'),
         ra=h('textarea',{className:'input input-m',style:{minHeight:'120px'}},s.rules_toml||''),
-        h('button',{className:'btn btn-sm',style:{marginTop:'10px'},onClick:function(){saveCfg('rules_toml',ra.value)}},t('save'))),
+        h('button',{className:'btn btn-sm',style:{marginTop:'10px'},onClick:function(e){saveCfg('rules_toml',ra.value,e.currentTarget)}},t('save'))),
       h('div',null,
         h('div',{style:{fontSize:'11px',fontWeight:'600',color:'var(--tx2)',marginBottom:'6px'}},'hosts.toml ('+t('read_only')+')'),
         h('div',{className:'cb'},s.hosts_toml||''))):null));

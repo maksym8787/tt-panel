@@ -1,3 +1,5 @@
+import ipaddress
+import os
 import re
 from pathlib import Path
 from config import VPN_TOML, HOSTS_TOML, RULES_TOML, logger
@@ -16,7 +18,8 @@ VPN_SCHEMA = {
     "speedtest_path": {"type": "str", "default": "/speedtest"},
     "ping_enable": {"type": "bool", "default": False},
     "ping_path": {"type": "str", "default": "/ping"},
-    "auth_failure_status_code": {"type": "int", "default": 407, "options": [407, 405]},
+    # 404/403 accepted since endpoint 1.0.41 (was 407/405 only).
+    "auth_failure_status_code": {"type": "int", "default": 407, "options": [407, 405, 404, 403]},
 }
 
 HTTP2_SCHEMA = {
@@ -40,6 +43,10 @@ QUIC_SCHEMA = {
 METRICS_SCHEMA = {
     "address": {"type": "str", "default": "127.0.0.1:1987"},
     "request_timeout_secs": {"type": "int", "default": 3, "min": 1, "max": 60},
+    # Endpoint 1.1.0+: adds per-user metric series and the /clients JSON
+    # endpoint. Exposes usernames and client IPs, so keep the metrics listener
+    # on loopback when enabling it.
+    "per_client_metrics": {"type": "bool", "default": False},
 }
 
 
@@ -174,108 +181,192 @@ def parse_rules_structured():
     return [{"cidr": r.get("cidr", ""), "client_random_prefix": r.get("client_random_prefix", ""), "action": r.get("action", "allow")} for r in rules]
 
 
-def save_vpn_structured(settings):
-    VPN_TOML_BAK = VPN_TOML.with_suffix(".toml.bak")
-    if VPN_TOML.exists():
-        VPN_TOML_BAK.write_text(VPN_TOML.read_text())
+def _is_table_array(v):
+    return isinstance(v, list) and len(v) > 0 and all(isinstance(x, dict) for x in v)
 
-    core = settings.get("core", {})
-    http2 = settings.get("http2", {})
-    quic = settings.get("quic", {})
-    metrics = settings.get("metrics", {})
-    forward = settings.get("forward", "direct")
-    socks5_addr = settings.get("socks5_address", "")
 
+def _toml_value(v):
+    if isinstance(v, bool):
+        return "true" if v else "false"
+    if isinstance(v, int):
+        return str(v)
+    if isinstance(v, float):
+        return repr(v)
+    if isinstance(v, list):
+        return "[" + ", ".join(_toml_value(x) for x in v) + "]"
+    return '"%s"' % _esc(v)
+
+
+def _dump_toml(data, prefix=""):
+    """Serialize a parsed-TOML dict back to text, preserving every key and table."""
     lines = []
+    tables = []
+    for k, v in data.items():
+        if isinstance(v, dict) or _is_table_array(v):
+            tables.append((k, v))
+        else:
+            lines.append("%s = %s" % (k, _toml_value(v)))
+    for k, v in tables:
+        path = "%s.%s" % (prefix, k) if prefix else k
+        if _is_table_array(v):
+            for entry in v:
+                lines.append("")
+                lines.append("[[%s]]" % path)
+                lines.extend(_dump_toml(entry, path))
+        else:
+            lines.append("")
+            lines.append("[%s]" % path)
+            lines.extend(_dump_toml(v, path))
+    return lines
 
+
+def _coerce(val, schema):
+    if schema["type"] == "bool":
+        if isinstance(val, bool):
+            return val
+        return str(val).strip().lower() in ("true", "1", "yes", "on")
+    if schema["type"] == "int":
+        try:
+            v = int(val)
+        except (ValueError, TypeError):
+            return schema["default"]
+        if "options" in schema and v not in schema["options"]:
+            return schema["default"]
+        mn, mx = schema.get("min"), schema.get("max")
+        if mn is not None:
+            v = max(mn, v)
+        if mx is not None:
+            v = min(mx, v)
+        return v
+    return str(val)
+
+
+_HOSTPORT_RE = re.compile(r'^(\[[0-9A-Fa-f:]+\]|[A-Za-z0-9._-]+):(\d{1,5})$')
+
+
+def validate_host_port(value: str) -> str:
+    """Accept only host:port / [v6]:port. Rejects anything that could inject TOML."""
+    v = str(value).strip()
+    m = _HOSTPORT_RE.match(v)
+    if not m:
+        raise ValueError("expected host:port, got %r" % value)
+    port = int(m.group(2))
+    if not (1 <= port <= 65535):
+        raise ValueError("port out of range: %d" % port)
+    return v
+
+
+def _atomic_write_text(path: Path, text: str, mode: int = 0o600):
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    fd = os.open(str(tmp), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, mode)
+    try:
+        with os.fdopen(fd, "w") as f:
+            f.write(text)
+            f.flush()
+            os.fsync(f.fileno())
+    except Exception:
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
+        raise
+    os.replace(str(tmp), str(path))
+    try:
+        os.chmod(str(path), mode)
+    except OSError:
+        pass
+
+
+def _backup(path: Path):
+    if path.exists():
+        bak = path.with_suffix(path.suffix + ".bak")
+        _atomic_write_text(bak, path.read_text())
+
+
+def save_vpn_structured(settings):
+    """Merge the edited values into the existing vpn.toml.
+
+    The panel only models a subset of TrustTunnel's options, so the file is
+    updated in place rather than regenerated — otherwise sections the UI does not
+    know about ([icmp], [listen_protocols.http1], the extended QUIC tuning …)
+    would be silently dropped.
+    """
+    _backup(VPN_TOML)
+    data = _parse_toml_file(VPN_TOML) if VPN_TOML.exists() else {}
+
+    core = settings.get("core") or {}
     for key, schema in VPN_SCHEMA.items():
-        val = core.get(key, schema["default"])
-        if key in ("credentials_file", "rules_file"):
-            continue
-        lines.append(_fmt_kv(key, val, schema))
+        if key in core:
+            data[key] = _coerce(core[key], schema)
 
-    lines.append("")
+    lp = data.setdefault("listen_protocols", {})
+    for section, schema_map in (("http2", HTTP2_SCHEMA), ("quic", QUIC_SCHEMA)):
+        incoming = settings.get(section) or {}
+        target = lp.setdefault(section, {})
+        for key, schema in schema_map.items():
+            if key in incoming:
+                target[key] = _coerce(incoming[key], schema)
 
-    existing = _parse_toml_file(VPN_TOML) if VPN_TOML.exists() else {}
-    creds = existing.get("credentials_file")
-    rules_f = existing.get("rules_file")
-    if creds:
-        lines.append('credentials_file = "%s"' % creds)
-    if rules_f:
-        lines.append('rules_file = "%s"' % rules_f)
-
-    lines.append("")
-    lines.append("[listen_protocols.http2]")
-    for key, schema in HTTP2_SCHEMA.items():
-        val = http2.get(key, schema["default"])
-        lines.append(_fmt_kv(key, val, schema))
-
-    lines.append("")
-    lines.append("[listen_protocols.quic]")
-    for key, schema in QUIC_SCHEMA.items():
-        val = quic.get(key, schema["default"])
-        lines.append(_fmt_kv(key, val, schema))
-
-    lines.append("")
-    if forward == "socks5" and socks5_addr:
-        lines.append("[forward_protocol.socks5]")
-        lines.append('address = "%s"' % socks5_addr)
-    else:
-        lines.append("[forward_protocol]")
-        lines.append("direct = {}")
-
-    lines.append("")
-    lines.append("[metrics]")
+    metrics_in = settings.get("metrics") or {}
+    metrics = data.setdefault("metrics", {})
     for key, schema in METRICS_SCHEMA.items():
-        val = metrics.get(key, schema["default"])
-        lines.append(_fmt_kv(key, val, schema))
+        if key not in metrics_in:
+            continue
+        if key == "address":
+            metrics[key] = validate_host_port(metrics_in[key])
+        else:
+            metrics[key] = _coerce(metrics_in[key], schema)
 
-    lines.append("")
-    VPN_TOML.write_text("\n".join(lines))
+    forward = settings.get("forward")
+    if forward == "socks5":
+        data["forward_protocol"] = {"socks5": {"address": validate_host_port(settings.get("socks5_address", ""))}}
+    elif forward == "direct":
+        data["forward_protocol"] = {"direct": {}}
+
+    _atomic_write_text(VPN_TOML, "\n".join(_dump_toml(data)).lstrip("\n") + "\n")
 
 
 def _esc(s):
     return str(s).replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n").replace("\r", "\\r")
 
 
+def validate_cidr(value: str) -> str:
+    v = str(value).strip()
+    # strict=False so 10.0.0.5/24 is accepted and normalised rather than rejected
+    return str(ipaddress.ip_network(v, strict=False))
+
+
+_HEXPREFIX_RE = re.compile(r'^[0-9A-Fa-f]{1,64}$')
+
+
 def save_rules_structured(rules):
-    RULES_BAK = RULES_TOML.with_suffix(".toml.bak")
-    if RULES_TOML.exists():
-        RULES_BAK.write_text(RULES_TOML.read_text())
+    _backup(RULES_TOML)
 
     lines = []
-    for r in rules:
-        lines.append("[[rule]]")
-        if r.get("cidr"):
-            lines.append('cidr = "%s"' % _esc(r["cidr"]))
-        if r.get("client_random_prefix"):
-            lines.append('client_random_prefix = "%s"' % _esc(r["client_random_prefix"]))
+    for idx, r in enumerate(rules):
+        cidr = str(r.get("cidr", "")).strip()
+        prefix = str(r.get("client_random_prefix", "")).strip()
+        if not cidr and not prefix:
+            continue
+        if cidr:
+            try:
+                cidr = validate_cidr(cidr)
+            except ValueError as e:
+                raise ValueError("rule %d: invalid CIDR %r (%s)" % (idx + 1, r.get("cidr"), e))
+        if prefix and not _HEXPREFIX_RE.match(prefix):
+            raise ValueError("rule %d: client_random_prefix must be hex" % (idx + 1))
         action = r.get("action", "allow")
         if action not in ("allow", "deny"):
             action = "allow"
+        lines.append("[[rule]]")
+        if cidr:
+            lines.append('cidr = "%s"' % _esc(cidr))
+        if prefix:
+            lines.append('client_random_prefix = "%s"' % _esc(prefix))
         lines.append('action = "%s"' % action)
         lines.append("")
 
-    RULES_TOML.write_text("\n".join(lines))
-
-
-def _fmt_kv(key, val, schema):
-    if schema["type"] == "bool":
-        return "%s = %s" % (key, "true" if val else "false")
-    elif schema["type"] == "int":
-        mn = schema.get("min")
-        mx = schema.get("max")
-        try:
-            v = int(val)
-        except (ValueError, TypeError):
-            v = schema["default"]
-        if mn is not None:
-            v = max(mn, v)
-        if mx is not None:
-            v = min(mx, v)
-        return "%s = %d" % (key, v)
-    else:
-        return '%s = "%s"' % (key, _esc(str(val)))
+    _atomic_write_text(RULES_TOML, "\n".join(lines))
 
 
 def get_schema():

@@ -3,10 +3,10 @@ import subprocess
 
 from fastapi import HTTPException, Request
 
-from auth import load_panel_db, save_panel_db, require_auth
+from auth import load_panel_db, update_panel_db, require_auth
 from config import VPN_TOML, RULES_TOML, HOSTS_TOML, LOG_FILE, logger
 from services import (
-    get_domain, _do_cert_renewal, apply_reload_now, _log_restart,
+    get_domain, _do_cert_renewal, apply_reload_now, schedule_reload, _log_restart,
 )
 from routes import app
 
@@ -14,7 +14,9 @@ from routes import app
 @app.post("/api/apply-reload")
 async def apply_reload(request: Request):
     await require_auth(request)
-    await asyncio.to_thread(apply_reload_now)
+    result = await asyncio.to_thread(apply_reload_now)
+    if not result.get("ok"):
+        raise HTTPException(500, "Service restart failed: " + (result.get("error") or "unknown"))
     return {"ok": True}
 
 
@@ -60,7 +62,11 @@ async def save_vpn_settings(request: Request):
     await require_auth(request)
     from services.toml_settings import save_vpn_structured
     body = await request.json()
-    await asyncio.to_thread(save_vpn_structured, body)
+    try:
+        await asyncio.to_thread(save_vpn_structured, body)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    schedule_reload("config_change:vpn.toml")
     return {"ok": True}
 
 
@@ -69,7 +75,14 @@ async def save_rules_settings(request: Request):
     await require_auth(request)
     from services.toml_settings import save_rules_structured
     body = await request.json()
-    await asyncio.to_thread(save_rules_structured, body.get("rules", []))
+    rules = body.get("rules", [])
+    if not isinstance(rules, list):
+        raise HTTPException(400, "rules must be a list")
+    try:
+        await asyncio.to_thread(save_rules_structured, rules)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    schedule_reload("config_change:rules.toml")
     return {"ok": True}
 
 
@@ -80,14 +93,28 @@ async def update_settings(filename: str, request: Request):
     if filename not in allowed:
         raise HTTPException(400, "Cannot edit")
     body = await request.json()
+    content = body.get("content", "")
+    if not isinstance(content, str):
+        raise HTTPException(400, "content must be a string")
+    if len(content) > 1_000_000:
+        raise HTTPException(400, "content too large")
 
     def _write():
+        from services.toml_settings import _atomic_write_text, _backup, _parse_toml_file
         target = allowed[filename]
-        if target.exists():
-            target.with_suffix(target.suffix + ".bak").write_text(target.read_text())
-        target.write_text(body.get("content", ""))
+        _backup(target)
+        _atomic_write_text(target, content)
+        # Surface a syntax error immediately instead of letting the service fail to start.
+        try:
+            _parse_toml_file(target)
+        except Exception as e:
+            return str(e)
+        return None
 
-    await asyncio.to_thread(_write)
+    err = await asyncio.to_thread(_write)
+    if err:
+        return {"ok": True, "warning": "Saved, but the file does not parse as TOML: " + err}
+    schedule_reload("config_change:" + filename)
     return {"ok": True}
 
 
@@ -159,28 +186,39 @@ async def get_panel_settings(request: Request):
     return {"settings": settings}
 
 
+def _clamped_int(body, key, lo, hi):
+    try:
+        return max(lo, min(int(body[key]), hi))
+    except (ValueError, TypeError):
+        raise HTTPException(400, "%s must be an integer between %d and %d" % (key, lo, hi))
+
+
 @app.put("/api/panel-settings")
 async def update_panel_settings(request: Request):
     await require_auth(request)
     body = await request.json()
-    db = await asyncio.to_thread(load_panel_db)
-    settings = db.get("panel_settings", {})
+    updates = {}
     if "session_ttl" in body:
-        ttl = int(body["session_ttl"])
-        settings["session_ttl"] = max(300, min(ttl, 604800))
+        updates["session_ttl"] = _clamped_int(body, "session_ttl", 300, 604800)
     if "auto_renew_enabled" in body:
-        settings["auto_renew_enabled"] = bool(body["auto_renew_enabled"])
+        updates["auto_renew_enabled"] = bool(body["auto_renew_enabled"])
     if "auto_renew_days" in body:
-        settings["auto_renew_days"] = max(1, min(int(body["auto_renew_days"]), 60))
+        updates["auto_renew_days"] = _clamped_int(body, "auto_renew_days", 1, 60)
     if "max_history_days" in body:
-        days = int(body["max_history_days"])
-        settings["max_history_days"] = max(1, min(days, 365))
+        updates["max_history_days"] = _clamped_int(body, "max_history_days", 1, 365)
     if "max_log_mb" in body:
-        mb = int(body["max_log_mb"])
-        settings["max_log_mb"] = max(5, min(mb, 500))
-    db["panel_settings"] = settings
-    await asyncio.to_thread(save_panel_db, db)
-    _apply_log_rotation(settings)
+        updates["max_log_mb"] = _clamped_int(body, "max_log_mb", 5, 500)
+
+    def _mutate(d):
+        settings = d.setdefault("panel_settings", {})
+        settings.update(updates)
+        return dict(settings)
+
+    settings = await asyncio.to_thread(update_panel_db, _mutate)
+    # Only touch journald/logrotate when the log limit itself was edited — every
+    # other setting change should have no side effects on /etc.
+    if "max_log_mb" in body:
+        await asyncio.to_thread(_apply_log_rotation, settings)
     return {"ok": True, "settings": settings}
 
 

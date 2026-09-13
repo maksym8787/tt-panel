@@ -60,11 +60,29 @@ def init_stats_db():
             key TEXT PRIMARY KEY,
             value TEXT
         )""")
+        # Per-user accounting from the endpoint's /clients endpoint
+        # (requires [metrics] per_client_metrics = true, endpoint 1.1.0+).
+        c.execute("""CREATE TABLE IF NOT EXISTS client_usage_hourly (
+            hour_ts INTEGER NOT NULL,
+            username TEXT NOT NULL,
+            inbound_bytes INTEGER DEFAULT 0,
+            outbound_bytes INTEGER DEFAULT 0,
+            sessions_max INTEGER DEFAULT 0,
+            last_ip TEXT,
+            last_seen INTEGER DEFAULT 0,
+            PRIMARY KEY (hour_ts, username)
+        )""")
+        # Added later: disconnect events used to be stored in `protocol`.
+        cols = {row[1] for row in c.execute("PRAGMA table_info(connections)")}
+        if "client_id" not in cols:
+            c.execute("ALTER TABLE connections ADD COLUMN client_id TEXT")
         c.execute("CREATE INDEX IF NOT EXISTS idx_metrics_ts ON metrics_snapshots(ts)")
         c.execute("CREATE INDEX IF NOT EXISTS idx_conn_ts ON connections(ts)")
         c.execute("CREATE INDEX IF NOT EXISTS idx_conn_ts_event ON connections(ts, event)")
         c.execute("CREATE INDEX IF NOT EXISTS idx_conn_ts_ip ON connections(ts, client_ip)")
         c.execute("CREATE INDEX IF NOT EXISTS idx_traffic_hour ON traffic_hourly(hour_ts)")
+        c.execute("CREATE INDEX IF NOT EXISTS idx_client_usage_hour ON client_usage_hourly(hour_ts)")
+        c.execute("CREATE INDEX IF NOT EXISTS idx_client_usage_user ON client_usage_hourly(username)")
         conn.commit()
 
 
@@ -82,6 +100,7 @@ def cleanup_old_data():
         c.execute("DELETE FROM metrics_snapshots WHERE ts < ?", (cutoff,))
         c.execute("DELETE FROM connections WHERE ts < ?", (cutoff,))
         c.execute("DELETE FROM traffic_hourly WHERE hour_ts < ?", (cutoff,))
+        c.execute("DELETE FROM client_usage_hourly WHERE hour_ts < ?", (cutoff,))
         conn.commit()
     now = time.time()
     if now - _last_vacuum_ts > 86400:
