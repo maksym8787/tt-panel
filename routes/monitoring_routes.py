@@ -85,8 +85,14 @@ async def server_status(request: Request):
         "vps": vps,
         "live": {
             "sessions": live.get("client_sessions", 0),
-            "inbound_bytes": live.get("inbound_traffic_bytes", 0),
-            "outbound_bytes": live.get("outbound_traffic_bytes", 0),
+            # The endpoint's own HELP text has these two backwards: it calls
+            # inbound_traffic_bytes "uploaded by clients", but it is what clients
+            # DOWNLOADED. Verified against the container client: tun0 RX 8.86 GB
+            # matched inbound 8.85 GB, while tun0 TX 373 MB matched outbound
+            # 417 MB. The DB columns keep the endpoint's names; everything the
+            # API hands out is named from the user's point of view instead.
+            "down_bytes": live.get("inbound_traffic_bytes", 0),
+            "up_bytes": live.get("outbound_traffic_bytes", 0),
             "tcp_sockets": live.get("outbound_tcp_sockets", 0),
             "udp_sockets": live.get("outbound_udp_sockets", 0),
             "memory_mb": round(live.get("process_resident_memory_bytes", 0) / 1024 / 1024, 1),
@@ -111,7 +117,7 @@ async def monitoring_history(request: Request, hours: int = 24):
             c = conn.cursor()
             c.execute("""SELECT ts, sessions, inbound_bytes, outbound_bytes, memory_bytes, cpu_seconds
                 FROM metrics_snapshots WHERE ts > ? ORDER BY ts""", (since,))
-            snapshots = [{"ts": r[0], "sessions": r[1], "in": r[2], "out": r[3], "mem": r[4], "cpu": r[5]} for r in c.fetchall()]
+            snapshots = [{"ts": r[0], "sessions": r[1], "down": r[2], "up": r[3], "mem": r[4], "cpu": r[5]} for r in c.fetchall()]
             max_points = 360
             if len(snapshots) > max_points:
                 step = len(snapshots) // max_points
@@ -141,7 +147,7 @@ async def monitoring_traffic(request: Request, days: int = 0, hours: int = 0):
             c = conn.cursor()
             c.execute("""SELECT hour_ts, inbound_bytes, outbound_bytes, sessions_max
                 FROM traffic_hourly WHERE hour_ts > ? ORDER BY hour_ts""", (since,))
-            return [{"ts": r[0], "in": r[1], "out": r[2], "peak": r[3]} for r in c.fetchall()]
+            return [{"ts": r[0], "down": r[1], "up": r[2], "peak": r[3]} for r in c.fetchall()]
 
     hourly = await asyncio.to_thread(_query)
     return {"hourly": hourly, "days": days}
@@ -308,8 +314,8 @@ async def monitoring_summary(request: Request):
             c.execute("SELECT COUNT(*) FROM connections WHERE ts >= ? AND event='connect'", (week_start,))
             conns_week = c.fetchone()[0]
         return {
-            "today": {"inbound": today_in, "outbound": today_out, "peak_sessions": peak_today, "connections": conns_today},
-            "week": {"inbound": week_in, "outbound": week_out, "peak_sessions": peak_week, "connections": conns_week},
+            "today": {"down": today_in, "up": today_out, "peak_sessions": peak_today, "connections": conns_today},
+            "week": {"down": week_in, "up": week_out, "peak_sessions": peak_week, "connections": conns_week},
         }
 
     return await asyncio.to_thread(_query)
@@ -340,7 +346,7 @@ async def monitoring_per_user(request: Request, hours: int = 24):
                 WHERE hour_ts >= ?
                 GROUP BY username
             """, (since,))
-            return {r[0]: {"inbound": r[1] or 0, "outbound": r[2] or 0,
+            return {r[0]: {"down": r[1] or 0, "up": r[2] or 0,
                            "peak_sessions": r[3] or 0, "last_seen": r[4] or 0}
                     for r in c.fetchall()}
 
@@ -353,15 +359,15 @@ async def monitoring_per_user(request: Request, hours: int = 24):
         username = entry.get("username")
         if not username:
             continue
-        row = users.setdefault(username, {"username": username, "inbound": 0, "outbound": 0,
+        row = users.setdefault(username, {"username": username, "down": 0, "up": 0,
                                           "peak_sessions": 0, "last_seen": 0})
         row["sessions"] = int(entry.get("sessions") or 0)
         row["ip"] = entry.get("ip")
-        row["total_inbound"] = int(entry.get("inbound") or 0)
-        row["total_outbound"] = int(entry.get("outbound") or 0)
+        row["total_down"] = int(entry.get("inbound") or 0)
+        row["total_up"] = int(entry.get("outbound") or 0)
 
     rows = sorted(users.values(),
-                  key=lambda u: (u.get("inbound", 0) + u.get("outbound", 0)), reverse=True)
+                  key=lambda u: (u.get("down", 0) + u.get("up", 0)), reverse=True)
     if rows:
         await asyncio.to_thread(enrich_with_geo, rows, "ip")
     return {"available": bool(available), "hours": hours, "users": rows}

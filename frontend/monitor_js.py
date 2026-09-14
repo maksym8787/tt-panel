@@ -86,8 +86,8 @@ function drawTrafficChart(){
   if(c){
     var labels=d.map(function(x){return ts2t(x.ts,S.monPeriod)});
     updateChart('traffic',c,{type:'line',data:{labels:labels,datasets:[
-      {label:'↓ '+t('download'),data:d.map(function(x){return (x.out||0)*8/interval/1000000}),borderColor:'#22c55e',backgroundColor:'rgba(34,197,94,0.1)',borderWidth:2,fill:true,tension:.35,pointRadius:0,pointHoverRadius:4,pointHoverBackgroundColor:'#22c55e'},
-      {label:'↑ '+t('upload'),data:d.map(function(x){return (x['in']||0)*8/interval/1000000}),borderColor:'#f59e0b',backgroundColor:'rgba(245,158,11,0.08)',borderWidth:2,fill:true,tension:.35,pointRadius:0,pointHoverRadius:4,pointHoverBackgroundColor:'#f59e0b'}
+      {label:'↓ '+t('download'),data:d.map(function(x){return (x.down||0)*8/interval/1000000}),borderColor:'#22c55e',backgroundColor:'rgba(34,197,94,0.1)',borderWidth:2,fill:true,tension:.35,pointRadius:0,pointHoverRadius:4,pointHoverBackgroundColor:'#22c55e'},
+      {label:'↑ '+t('upload'),data:d.map(function(x){return (x.up||0)*8/interval/1000000}),borderColor:'#f59e0b',backgroundColor:'rgba(245,158,11,0.08)',borderWidth:2,fill:true,tension:.35,pointRadius:0,pointHoverRadius:4,pointHoverBackgroundColor:'#f59e0b'}
     ]},options:baseOpts({xTicks:24,yCallback:function(v){return fmtMbps(v)},tooltipLabel:function(ctx){return ctx.dataset.label+': '+fmtMbps(ctx.raw)}})})
   }
 }
@@ -141,8 +141,8 @@ function renderPerUser(){
             h('td',{style:{color:'var(--tx)'}},
               h('span',{className:'dot '+(online?'dot-on':'dot-off'),style:{marginRight:'6px'}}),u.username),
             h('td',null,String(u.sessions||0)),
-            h('td',{style:{textAlign:'right',color:'var(--gn)'}},fmt(u.outbound||0)),
-            h('td',{style:{textAlign:'right',color:'var(--or)'}},fmt(u.inbound||0)),
+            h('td',{style:{textAlign:'right',color:'var(--gn)'}},fmt(u.down||0)),
+            h('td',{style:{textAlign:'right',color:'var(--or)'}},fmt(u.up||0)),
             h('td',{style:{fontFamily:'var(--m)',fontSize:'10px'}},(g.flag?g.flag+' ':'')+(u.ip||'—')),
             h('td',null,u.last_seen?ago(u.last_seen):'—'))}))))));
 }
