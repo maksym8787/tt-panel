@@ -159,6 +159,24 @@ def get_domain():
     return "unknown"
 
 
+def _clean_export(stdout, fmt):
+    """Keep only the configuration itself.
+
+    In deeplink mode the endpoint prints the tt:// URI followed by a blank line
+    and a "To connect on mobile, you can scan QR code on the page: https://..."
+    hint. Feeding all of that into the QR made phones open the app with a
+    payload it could not parse, so nothing was added. The official qr.html
+    encodes exactly 'tt://?' + payload and nothing else; so do we.
+    """
+    if fmt == "deeplink":
+        for line in stdout.splitlines():
+            line = line.strip()
+            if line.startswith("tt://"):
+                return line
+        return None
+    return stdout.strip()
+
+
 def export_client_config(username, fmt="toml"):
     if fmt not in EXPORT_FORMATS:
         raise ValueError("unsupported format: %s" % fmt)
@@ -170,7 +188,7 @@ def export_client_config(username, fmt="toml"):
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=10, cwd=str(TT_DIR))
         if r.returncode == 0:
-            return r.stdout.strip()
+            return _clean_export(r.stdout, fmt)
         logger.error("export_client_config failed (rc=%d): %s", r.returncode, r.stderr.strip()[:300])
     except Exception as e:
         logger.error("export_client_config exception: %s", e)
