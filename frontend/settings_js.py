@@ -167,7 +167,13 @@ function renderSettings(){
         h('div',{style:{display:'flex',alignItems:'center',gap:'8px',marginTop:'8px'}},
           h('input',{className:'input',type:'number',min:'5',max:'500',style:{width:'80px',padding:'4px 8px',fontSize:'12px'},value:String(ps.max_log_mb||50),onChange:function(e){var val=parseInt(e.target.value);if(val<5||val>500)return;api('/panel-settings',{method:'PUT',body:JSON.stringify({max_log_mb:val})}).then(function(){if(!S.panelSettings)S.panelSettings={};S.panelSettings.max_log_mb=val;toast(t('saved'))}).catch(function(er){toast(er.message,true)})}}),
           h('span',{style:{fontSize:'11px',color:'var(--tx3)'}},'MB'),
-          h('button',{className:'btn btn-xs',onClick:function(){api('/cleanup-logs',{method:'POST'}).then(function(d){toast(d.cleaned.length?d.cleaned.join('; '):t('nothing_to_clean'))}).catch(function(er){toast(er.message,true)})}},t('cleanup_now')))))
+          h('button',{className:'btn btn-xs',onClick:function(){api('/cleanup-logs',{method:'POST'}).then(function(d){toast(d.cleaned.length?d.cleaned.join('; '):t('nothing_to_clean'))}).catch(function(er){toast(er.message,true)})}},t('cleanup_now'))))),
+    h('div',{className:'grid grid2 section-gap'},
+      h('div',{className:'stat'},
+        h('div',{className:'stat-l'},t('client_name')),
+        h('input',{className:'input',type:'text',id:'client-name',maxLength:'64',style:{marginTop:'8px'},placeholder:(S.status&&S.status.domain)||'',value:ps.client_name||'',
+          onChange:function(e){var val=e.target.value.trim();api('/panel-settings',{method:'PUT',body:JSON.stringify({client_name:val})}).then(function(){if(!S.panelSettings)S.panelSettings={};S.panelSettings.client_name=val;toast(t('saved'))}).catch(function(er){toast(er.message,true)})}}),
+        h('div',{style:{fontSize:'10px',color:'var(--tx3)',marginTop:'6px'}},t('client_name_hint'))))
   ];
   if(ss){
     sections.push(h('div',{className:'card'},

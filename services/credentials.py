@@ -159,6 +159,22 @@ def get_domain():
     return "unknown"
 
 
+def client_display_name(domain):
+    """What the client app shows as the server's name.
+
+    Without -n the endpoint emits no name tag at all and the app falls back to
+    a literal "Server", which is useless once someone has two of them. The
+    operator can set a friendly name in panel settings; otherwise the domain.
+    """
+    try:
+        from auth import load_panel_db
+        name = (load_panel_db().get("panel_settings") or {}).get("client_name") or ""
+        name = str(name).strip()
+    except Exception:
+        name = ""
+    return name or domain
+
+
 def _clean_export(stdout, fmt):
     """Keep only the configuration itself.
 
@@ -184,7 +200,8 @@ def export_client_config(username, fmt="toml"):
         raise ValueError("invalid username")
     domain = get_domain()
     cmd = [str(TT_DIR / "trusttunnel_endpoint"), str(VPN_TOML), str(HOSTS_TOML),
-           "-c", username, "-a", domain, "-f", fmt]
+           "-c", username, "-a", domain, "-f", fmt,
+           "-n", client_display_name(domain)]
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=10, cwd=str(TT_DIR))
         if r.returncode == 0:

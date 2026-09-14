@@ -10,6 +10,9 @@ from services import (
 )
 from routes import app
 
+# Server display name carried in exported client configs (deeplink tag 0x0C).
+CLIENT_NAME_MAX = 64
+
 
 @app.post("/api/apply-reload")
 async def apply_reload(request: Request):
@@ -179,6 +182,8 @@ async def get_panel_settings(request: Request):
         "auto_renew_days": 10,
         "max_history_days": 30,
         "max_log_mb": 50,
+        # Shown as the server's name in the client app; empty means the domain.
+        "client_name": "",
     }
     settings = db.get("panel_settings", {})
     for k, v in defaults.items():
@@ -208,6 +213,13 @@ async def update_panel_settings(request: Request):
         updates["max_history_days"] = _clamped_int(body, "max_history_days", 1, 365)
     if "max_log_mb" in body:
         updates["max_log_mb"] = _clamped_int(body, "max_log_mb", 5, 500)
+    if "client_name" in body:
+        name = str(body["client_name"] or "").strip()
+        if len(name) > CLIENT_NAME_MAX:
+            raise HTTPException(400, "client_name must be at most %d characters" % CLIENT_NAME_MAX)
+        if any(ord(ch) < 32 for ch in name):
+            raise HTTPException(400, "client_name must not contain control characters")
+        updates["client_name"] = name
 
     def _mutate(d):
         settings = d.setdefault("panel_settings", {})
