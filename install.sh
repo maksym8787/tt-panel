@@ -61,6 +61,10 @@ TT_GPG_KEY="${TT_GPG_KEY:-28645AC9776EC4C00BCE2AFC0FE641E7235E2EC6}"
 TT_DIR="/opt/trusttunnel"
 PANEL_DIR="/opt/trusttunnel-panel"
 PANEL_REPO="https://github.com/maksym8787/tt-panel.git"
+# ICMP forwarding is bound to a named interface; cloud images call it ens3,
+# enp1s0, eth0... so take whichever carries the default route.
+NET_IF="$(ip -o route get 1.1.1.1 2>/dev/null | sed -n 's/.*dev \([^ ]*\).*/\1/p' | head -1)"
+NET_IF="${NET_IF:-eth0}"
 
 # The panel is not exposed on a port of its own: many networks drop everything
 # but 443, and an open admin port is an invitation besides. Instead the endpoint
@@ -78,7 +82,7 @@ log "Installing dependencies..."
 export DEBIAN_FRONTEND=noninteractive
 export NEEDRESTART_SUSPEND=1
 apt update
-apt install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" python3 python3-venv python3-pip certbot git curl openssl
+apt install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" python3 python3-venv python3-pip certbot git curl openssl unattended-upgrades
 
 log "Creating directories..."
 mkdir -p "$TT_DIR/certs" "$PANEL_DIR"
@@ -237,7 +241,7 @@ enable_early_data = true
 message_queue_capacity = 4096
 
 [icmp]
-interface_name = "eth0"
+interface_name = "$NET_IF"
 request_timeout_secs = 3
 recv_message_queue_capacity = 256
 
@@ -452,10 +456,61 @@ cat > /etc/logrotate.d/syslog-custom << 'EOF'
 }
 EOF
 
+log "Tuning the kernel for many concurrent tunnels..."
+cat > /etc/sysctl.d/99-trusttunnel.conf << 'EOF'
+# BBR + fq: better throughput and lower latency under many parallel streams.
+net.core.default_qdisc = fq
+net.ipv4.tcp_congestion_control = bbr
+net.core.somaxconn = 4096
+net.ipv4.tcp_max_syn_backlog = 8192
+net.core.netdev_max_backlog = 16384
+net.core.rmem_max = 16777216
+net.core.wmem_max = 16777216
+net.ipv4.tcp_rmem = 4096 87380 16777216
+net.ipv4.tcp_wmem = 4096 65536 16777216
+net.ipv4.tcp_fastopen = 3
+net.ipv4.tcp_mtu_probing = 1
+net.ipv4.ip_local_port_range = 10240 65535
+net.ipv4.tcp_fin_timeout = 15
+net.ipv4.tcp_slow_start_after_idle = 0
+fs.file-max = 1000000
+EOF
+modprobe tcp_bbr 2>/dev/null || true
+sysctl -q --system >/dev/null 2>&1 || warn "sysctl reported errors; check /etc/sysctl.d/99-trusttunnel.conf"
+
+# logrotate's maxsize only bites when logrotate actually runs; the stock timer
+# is daily, so a busy debug log could reach hundreds of MB in between.
+mkdir -p /etc/systemd/system/logrotate.timer.d
+cat > /etc/systemd/system/logrotate.timer.d/hourly.conf << 'EOF'
+[Timer]
+OnCalendar=
+OnCalendar=hourly
+AccuracySec=1m
+EOF
+
+# Small VPS images often ship without swap; 512M keeps the OOM killer away
+# from the endpoint during log/compression spikes.
+if [ -z "$(swapon --show --noheadings 2>/dev/null)" ] && [ ! -f /swapfile ]; then
+    log "Adding a 512M swap file..."
+    if fallocate -l 512M /swapfile && chmod 600 /swapfile && mkswap -q /swapfile && swapon /swapfile; then
+        grep -q '^/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+    else
+        warn "Could not create swap; continuing without it"
+        rm -f /swapfile
+    fi
+fi
+
+# Security updates on their own; kernels still need a manual reboot.
+cat > /etc/apt/apt.conf.d/20auto-upgrades << 'EOF'
+APT::Periodic::Update-Package-Lists "1";
+APT::Periodic::Unattended-Upgrade "1";
+EOF
+
 log "Enabling and starting services..."
 systemctl daemon-reload
 systemctl enable trusttunnel tt-admin
 systemctl restart systemd-journald
+systemctl restart logrotate.timer 2>/dev/null || true
 systemctl start tt-admin
 
 log "Waiting for panel to start..."
