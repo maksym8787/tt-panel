@@ -71,7 +71,18 @@ NET_IF="${NET_IF:-eth0}"
 # proxies 443 to the panel on loopback, under a secret path. Everything outside
 # that path answers like a dull JSON API (see frontend/__init__.py).
 PANEL_PORT="${TT_PANEL_PORT:-2053}"
-PANEL_PATH="${TT_PANEL_PATH:-/proxybee}"
+# This repository is public, so a fixed default path would be no secret at all.
+# Generate one per install unless TT_PANEL_PATH says otherwise; it is printed
+# at the end and can always be read back from `systemctl cat tt-admin`.
+if [ -n "${TT_PANEL_PATH:-}" ]; then
+    PANEL_PATH="$TT_PANEL_PATH"
+elif [ -f /etc/systemd/system/tt-admin.service ] \
+     && grep -q '^Environment=TT_PANEL_PATH=' /etc/systemd/system/tt-admin.service; then
+    # Re-running the installer must not move an existing panel.
+    PANEL_PATH="$(sed -n 's/^Environment=TT_PANEL_PATH=//p' /etc/systemd/system/tt-admin.service | head -1)"
+else
+    PANEL_PATH="/$(tr -dc 'a-z0-9' < /dev/urandom | head -c 12)"
+fi
 PANEL_PATH="/$(echo "$PANEL_PATH" | sed 's#^/*##; s#/*$##')"
 if [ "$PANEL_PATH" = "/" ]; then err "TT_PANEL_PATH must be a non-empty path, e.g. /proxybee"; fi
 
