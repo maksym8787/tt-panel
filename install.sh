@@ -65,6 +65,14 @@ PANEL_REPO="https://github.com/maksym8787/tt-panel.git"
 # enp1s0, eth0... so take whichever carries the default route.
 NET_IF="$(ip -o route get 1.1.1.1 2>/dev/null | sed -n 's/.*dev \([^ ]*\).*/\1/p' | head -1)"
 NET_IF="${NET_IF:-eth0}"
+# Tell clients IPv6 works only when this host can actually route it; otherwise
+# they try v6 destinations through the tunnel first and wait for timeouts.
+if ip -6 route show default 2>/dev/null | grep -q . && ip -6 addr show scope global 2>/dev/null | grep -q inet6; then
+    TT_IPV6="true"
+else
+    TT_IPV6="false"
+fi
+TT_IPV6="${TT_FORCE_IPV6:-$TT_IPV6}"
 
 # The panel is not exposed on a port of its own: many networks drop everything
 # but 443, and an open admin port is an invitation besides. Instead the endpoint
@@ -201,7 +209,7 @@ cat > $TT_DIR/vpn.toml << TOMLEOF
 listen_address = "0.0.0.0:443"
 credentials_file = "credentials.toml"
 rules_file = "rules.toml"
-ipv6_available = true
+ipv6_available = $TT_IPV6
 allow_private_network_connections = false
 tls_handshake_timeout_secs = 10
 client_listener_timeout_secs = 600
