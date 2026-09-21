@@ -328,11 +328,16 @@ function _patchAttrs(oldEl,newEl){
     if(at.name==='style'||at.name==='class')continue;
     if(oldEl.getAttribute(at.name)!==at.value)oldEl.setAttribute(at.name,at.value);
   }
-  // attributes that disappeared
+  // attributes that disappeared. A <canvas> is owned by Chart.js once a chart
+  // is attached: it sets width/height to the backing-store size, and the
+  // vnode never carries them. Stripping them reset the bitmap to 300x150 on
+  // every refresh, and CSS stretched that into a blurry, cropped chart.
+  var isCanvas=oldEl.tagName==='CANVAS';
   var oa2=oldEl.attributes;
   for(var k=oa2.length-1;k>=0;k--){
     var an=oa2[k].name;
     if(an==='style'||an==='class')continue;
+    if(isCanvas&&(an==='width'||an==='height'))continue;
     if(!newEl.hasAttribute(an))oldEl.removeAttribute(an);
   }
   // real properties
