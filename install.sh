@@ -459,19 +459,16 @@ cat > /etc/logrotate.d/trusttunnel << 'EOF'
 }
 EOF
 
-cat > /etc/logrotate.d/syslog-custom << 'EOF'
-/var/log/syslog {
-    daily
-    rotate 2
-    maxsize 20M
-    compress
-    missingok
-    notifempty
-    postrotate
-        /usr/lib/rsyslog/rsyslog-rotate
-    endscript
-}
-EOF
+# Ubuntu's own rsyslog stanza already covers /var/log/syslog, and logrotate
+# refuses a second stanza for the same file (and marks the run failed). So
+# tighten the stock one in place instead of adding our own.
+rm -f /etc/logrotate.d/syslog-custom
+if [ -f /etc/logrotate.d/rsyslog ]; then
+    sed -i -e 's/^\([[:space:]]*\)rotate [0-9]\+/\1rotate 2/' \
+           -e 's/^\([[:space:]]*\)weekly$/\1daily/' /etc/logrotate.d/rsyslog
+    grep -q 'maxsize' /etc/logrotate.d/rsyslog \
+        || sed -i 's/^\([[:space:]]*\)daily$/\1daily\n\1maxsize 20M/' /etc/logrotate.d/rsyslog
+fi
 
 log "Tuning the kernel for many concurrent tunnels..."
 cat > /etc/sysctl.d/99-trusttunnel.conf << 'EOF'
