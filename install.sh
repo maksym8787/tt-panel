@@ -265,9 +265,15 @@ TOMLEOF
 cat > $TT_DIR/rules.toml << 'TOMLEOF'
 TOMLEOF
 
-if [ ! -f "$TT_DIR/credentials.toml" ]; then
-    : > "$TT_DIR/credentials.toml"
+# The endpoint will not start on an empty credentials file, and with the panel
+# behind its reverse proxy that would leave no way in. Seed one placeholder
+# client with a throwaway random password; the panel hides it and replaces it
+# with the first real user (see services/credentials.py).
+if [ ! -s "$TT_DIR/credentials.toml" ]; then
+    printf '[[client]]\nusername = "__no_users__"\npassword = "%s"\n' \
+        "$(openssl rand -base64 36 | tr -d '/+=\n')" > "$TT_DIR/credentials.toml"
 fi
+chmod 600 "$TT_DIR/credentials.toml"
 # Holds every VPN password in cleartext.
 chmod 600 "$TT_DIR/credentials.toml"
 chmod 644 "$TT_DIR/vpn.toml" "$TT_DIR/hosts.toml" "$TT_DIR/rules.toml"
@@ -511,7 +517,7 @@ systemctl daemon-reload
 systemctl enable trusttunnel tt-admin
 systemctl restart systemd-journald
 systemctl restart logrotate.timer 2>/dev/null || true
-systemctl start tt-admin
+systemctl start trusttunnel tt-admin
 
 log "Waiting for panel to start..."
 PANEL_URL="http://127.0.0.1:${PANEL_PORT}${PANEL_PATH}"
@@ -550,7 +556,6 @@ echo -e "  443 -> panel: $([ "$PROXY_OK" = "1" ] && echo -e "${GREEN}verified${N
 echo ""
 echo -e "  ${YELLOW}1. Open the panel and create admin password (min 12 chars)${NC}"
 echo -e "  ${YELLOW}2. Add a VPN user through the panel${NC}"
-echo -e "  ${YELLOW}3. TrustTunnel will start automatically${NC}"
 echo ""
 echo -e "  The panel has no port of its own: it listens on 127.0.0.1:$PANEL_PORT and is"
 echo -e "  reached only through 443 under ${CYAN}$PANEL_PATH${NC}. Every other path on 443"

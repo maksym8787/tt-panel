@@ -18,6 +18,19 @@ EXPORT_FORMATS = ("toml", "deeplink")
 
 USERNAME_RE = re.compile(r'^[a-zA-Z0-9_\-]{1,64}$')
 
+# The endpoint refuses to start on a credentials file with no [[client]] at all
+# (an empty file and `client = []` both fail to parse). With the panel behind
+# the endpoint's reverse proxy that would take the panel down together with
+# the VPN the moment the last user is removed. So an empty user list is
+# written as one placeholder client whose password is random and discarded:
+# nobody can authenticate as it, and the panel never shows it.
+PLACEHOLDER_USER = "__no_users__"
+
+
+def placeholder_client_toml():
+    return '[[client]]\nusername = "%s"\npassword = "%s"\n' % (
+        PLACEHOLDER_USER, secrets.token_urlsafe(36))
+
 
 def _parse_toml_stdlib(path: Path) -> list:
     if sys.version_info < (3, 11):
@@ -69,8 +82,9 @@ def write_credentials(clients):
                     "created_at": created,
                 })
         _backup(CREDS_TOML)
+        body = "\n".join(lines) if lines else placeholder_client_toml()
         # 0600: this file holds every VPN password in cleartext.
-        _atomic_write_text(CREDS_TOML, "\n".join(lines), mode=0o600)
+        _atomic_write_text(CREDS_TOML, body, mode=0o600)
 
         def _mutate(panel):
             panel["disabled_users"] = disabled_store
@@ -83,7 +97,7 @@ def _read_credentials_file():
         return []
     raw = _parse_toml_stdlib(CREDS_TOML)
     if raw is not None:
-        return [_normalize_client(c) for c in raw]
+        return [_normalize_client(c) for c in raw if c.get("username") != PLACEHOLDER_USER]
     raw_clients = []
     current = {}
     for line in CREDS_TOML.read_text().splitlines():
@@ -97,7 +111,7 @@ def _read_credentials_file():
             current[k.strip()] = v.strip().strip('"')
     if current:
         raw_clients.append(current)
-    return [_normalize_client(c) for c in raw_clients]
+    return [_normalize_client(c) for c in raw_clients if c.get("username") != PLACEHOLDER_USER]
 
 
 def parse_credentials():
