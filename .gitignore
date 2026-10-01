@@ -10,3 +10,5 @@ panel.corrupt
 # The client panel is tracked, but its runtime state is not.
 tt-client-panel/net_history.json
 tt-client-panel/venv/
+.DS_Store
+**/.DS_Store
