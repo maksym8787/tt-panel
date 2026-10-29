@@ -265,6 +265,9 @@ request_timeout_secs = 3
 recv_message_queue_capacity = 256
 
 [metrics]
+# The panel's per-user traffic, session counts and the /clients endpoint all
+# come from this; without it those screens are permanently empty.
+per_client_metrics = true
 address = "127.0.0.1:1987"
 request_timeout_secs = 3
 TOMLEOF
@@ -446,6 +449,22 @@ systemctl restart tt-admin
 echo "Deployed at $(date)"
 DEPLOYEOF
 chmod +x $PANEL_DIR/deploy.sh
+
+log "Installing the certbot deploy hook..."
+# certbot.timer renews on its own schedule and nothing would copy the result
+# into $TT_DIR/certs — the endpoint would keep serving the old certificate
+# until the panel's own renewal happened to run. This closes that gap.
+mkdir -p /etc/letsencrypt/renewal-hooks/deploy
+cat > /etc/letsencrypt/renewal-hooks/deploy/trusttunnel.sh << HOOKEOF
+#!/bin/bash
+# RENEWED_LINEAGE is set by certbot to /etc/letsencrypt/live/<name>
+[ -n "\$RENEWED_LINEAGE" ] || exit 0
+install -m 644 "\$RENEWED_LINEAGE/fullchain.pem" $TT_DIR/certs/cert.pem || exit 1
+install -m 600 "\$RENEWED_LINEAGE/privkey.pem" $TT_DIR/certs/key.pem || exit 1
+systemctl restart trusttunnel
+systemctl restart tt-admin
+HOOKEOF
+chmod 700 /etc/letsencrypt/renewal-hooks/deploy/trusttunnel.sh
 
 log "Configuring log rotation..."
 mkdir -p /etc/systemd/journald.conf.d
