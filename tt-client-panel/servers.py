@@ -21,7 +21,12 @@ _ADDRESS_RE = re.compile(
 _HOSTNAME_RE = re.compile(r'^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,251}[A-Za-z0-9])?$')
 MAX_ADDRESSES = 8
 # Client default since v1.1.5 (raised from 1280 to reduce QUIC fragmentation).
-DEFAULT_MTU = 1350
+# 1350 left no room for QUIC: Apple devices behind the gateway send datagrams of
+# exactly 1378 bytes (1350 UDP payload + 28 of IP/UDP headers), and every one of
+# them bounced with ICMP "need to frag". The upstream is HTTP/2 over TCP, so the
+# inner MTU is not bound by the outer path (measured at 1492) — but keep headroom
+# in case the upstream is ever switched to HTTP/3, where the outer becomes UDP.
+DEFAULT_MTU = 1400
 
 
 def _split_host(address: str) -> str:

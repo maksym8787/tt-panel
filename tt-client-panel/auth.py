@@ -32,7 +32,7 @@ _default_panel = {
         "vpn_mode": "general",
         "dns_upstreams": [],
         "exclusions": [],
-        "mtu_size": 1350,
+        "mtu_size": 1400,  # see DEFAULT_MTU in servers.py
         "session_ttl": 86400,
     },
     "servers": [],
